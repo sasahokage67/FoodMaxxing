@@ -4,6 +4,7 @@ import { INITIAL_STATIONS, MENU_ITEMS, SHELF_BAYS_RU, SHELF_BAYS_KZ, SHELF_BAYS_
 import { calculateJITSchedule, minutesToTimeString, timeStringToMinutes } from '../engine/scheduler';
 import { Language, Translations, TRANSLATIONS } from '../i18n/translations';
 import { playNewOrderSound, playOrderReadySound, playPickupSuccessSound, isSoundEnabled, setSoundEnabled } from '../utils/audio';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export interface AppContextType {
   lang: Language;
@@ -62,6 +63,54 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function getInitialOrders(): Order[] {
   return [];
+}
+
+export function mapDbToOrder(row: any): Order {
+  return {
+    id: String(row.id),
+    orderNumber: String(row.order_number || row.id),
+    customerId: row.customer_id ? String(row.customer_id) : undefined,
+    customerName: String(row.customer_name || ''),
+    customerPhone: row.customer_phone ? String(row.customer_phone) : undefined,
+    items: Array.isArray(row.items) ? row.items : [],
+    totalAmount: Number(row.total_amount) || 0,
+    requestedPickupTime: String(row.requested_pickup_time || ''),
+    status: (row.status as any) || 'SCHEDULED',
+    estimatedReadyTime: String(row.estimated_ready_time || ''),
+    scheduledFireTime: String(row.scheduled_fire_time || ''),
+    shelfBay: row.shelf_bay ? String(row.shelf_bay) : undefined,
+    delayMinutes: Number(row.delay_minutes) || 0,
+    delayReason: row.delay_reason ? String(row.delay_reason) : undefined,
+    createdAt: Number(row.created_at) || Date.now(),
+    cookingStartedAt: row.cooking_started_at ? Number(row.cooking_started_at) : undefined,
+    readyAt: row.ready_at ? Number(row.ready_at) : undefined,
+    pickedUpAt: row.picked_up_at ? Number(row.picked_up_at) : undefined,
+    actualWaitTimeSeconds: row.actual_wait_time_seconds ? Number(row.actual_wait_time_seconds) : undefined,
+  };
+}
+
+export function mapOrderToDb(order: Order): Record<string, any> {
+  return {
+    id: order.id,
+    order_number: order.orderNumber,
+    customer_id: order.customerId || null,
+    customer_name: order.customerName,
+    customer_phone: order.customerPhone || null,
+    items: order.items,
+    total_amount: order.totalAmount,
+    requested_pickup_time: order.requestedPickupTime,
+    status: order.status,
+    estimated_ready_time: order.estimatedReadyTime,
+    scheduled_fire_time: order.scheduledFireTime,
+    shelf_bay: order.shelfBay || null,
+    delay_minutes: order.delayMinutes || 0,
+    delay_reason: order.delayReason || null,
+    created_at: order.createdAt,
+    cooking_started_at: order.cookingStartedAt || null,
+    ready_at: order.readyAt || null,
+    picked_up_at: order.pickedUpAt || null,
+    actual_wait_time_seconds: order.actualWaitTimeSeconds || null,
+  };
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -263,6 +312,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
+  // Supabase Realtime synchronization across customer & kitchen devices
+  useEffect(() => {
+    if (!supabase || !isSupabaseConfigured) return;
+
+    supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }: { data: any; error: any }) => {
+        if (error) {
+          console.error('Supabase initial fetch error:', error.message);
+          return;
+        }
+        if (data && data.length > 0) {
+          const loadedOrders = data.map(mapDbToOrder).filter((o: Order) => !isLegacyMockOrder(o));
+          setOrders(loadedOrders);
+          try {
+            localStorage.setItem('express_orders', JSON.stringify(loadedOrders));
+          } catch {
+            // ignore
+          }
+        }
+      });
+
+    const channel = supabase
+      .channel('express-orders-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newOrder = mapDbToOrder(payload.new);
+            if (isLegacyMockOrder(newOrder)) return;
+            setOrders(prev => {
+              if (prev.some(o => o.id === newOrder.id)) return prev;
+              playNewOrderSound();
+              return [newOrder, ...prev];
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToOrder(payload.new);
+            setOrders(prev => {
+              const existing = prev.find(o => o.id === updated.id);
+              if (existing && existing.status !== updated.status) {
+                if (updated.status === 'READY') {
+                  playOrderReadySound();
+                } else if (updated.status === 'PICKED_UP') {
+                  playPickupSuccessSound();
+                }
+              }
+              return prev.map(o => (o.id === updated.id ? updated : o));
+            });
+          } else if (payload.eventType === 'DELETE') {
+            if (payload.old && payload.old.id) {
+              setOrders(prev => prev.filter(o => o.id !== payload.old.id));
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      if (supabase) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, []);
+
   const broadcastSync = () => {
     try {
       const channel = new BroadcastChannel('express_pickup_sync_channel');
@@ -401,6 +517,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
+    if (supabase && isSupabaseConfigured) {
+      const dbPayload = mapOrderToDb(newOrder);
+      supabase.from('orders').insert(dbPayload).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase createOrder error:', error.message);
+      });
+    }
+
     setActiveOrderId(newOrder.id);
     setMyOrderIds(prev => [newOrder.id, ...prev.filter(myId => myId !== newOrder.id)]);
     try {
@@ -415,16 +538,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const advanceOrderStatus = (orderId: string, customBay?: string) => {
+    let targetUpdated: Order | null = null;
     setOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
 
         if (ord.status === 'SCHEDULED') {
-          return {
+          targetUpdated = {
             ...ord,
             status: 'COOKING',
             cookingStartedAt: Date.now()
           };
+          return targetUpdated;
         }
 
         if (ord.status === 'COOKING') {
@@ -433,12 +558,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const availableBay = customBay || shelfBays.find(b => !usedBays.includes(b)) || defaultBay;
 
           playOrderReadySound();
-          return {
+          targetUpdated = {
             ...ord,
             status: 'READY',
             readyAt: Date.now(),
             shelfBay: availableBay
           };
+          return targetUpdated;
         }
 
         if (ord.status === 'READY') {
@@ -446,30 +572,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const readyTime = ord.readyAt || (now - 60000);
           const waitSecs = Math.max(45, Math.round((now - readyTime) / 1000));
 
-          return {
+          targetUpdated = {
             ...ord,
             status: 'PICKED_UP',
             pickedUpAt: now,
             actualWaitTimeSeconds: waitSecs
           };
+          return targetUpdated;
         }
 
         return ord;
       })
     );
+
+    if (targetUpdated && supabase && isSupabaseConfigured) {
+      const dbPayload = mapOrderToDb(targetUpdated);
+      supabase.from('orders').update(dbPayload).eq('id', orderId).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase advanceOrderStatus error:', error.message);
+      });
+    }
   };
 
   const delayOrder = (orderId: string, minutes: number, reason?: string) => {
+    let targetUpdated: Order | null = null;
     setOrders(prev =>
       prev.map(ord => {
         if (ord.id !== orderId) return ord;
-        return {
+        targetUpdated = {
           ...ord,
           delayMinutes: (ord.delayMinutes || 0) + minutes,
           delayReason: reason || (lang === 'kz' ? 'Асхана жүктемесі жоғары' : lang === 'en' ? 'Kitchen rush' : 'Высокая загрузка кухни')
         };
+        return targetUpdated;
       })
     );
+
+    if (targetUpdated && supabase && isSupabaseConfigured) {
+      const dbPayload = mapOrderToDb(targetUpdated);
+      supabase.from('orders').update(dbPayload).eq('id', orderId).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase delayOrder error:', error.message);
+      });
+    }
   };
 
   const cancelOrder = (orderId: string): boolean => {
@@ -481,6 +624,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'CANCELLED' } : o));
+
+    if (supabase && isSupabaseConfigured) {
+      supabase.from('orders').update({ status: 'CANCELLED' }).eq('id', orderId).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase cancelOrder error:', error.message);
+      });
+    }
     return true;
   };
 
@@ -528,6 +677,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setLastScannedOrder(updatedOrder);
     playPickupSuccessSound();
 
+    if (supabase && isSupabaseConfigured) {
+      const dbPayload = mapOrderToDb(updatedOrder);
+      supabase.from('orders').update(dbPayload).eq('id', order.id).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase verifyPickup error:', error.message);
+      });
+    }
+
     return {
       success: true,
       order: updatedOrder,
@@ -560,6 +716,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('express_my_order_ids', JSON.stringify([]));
     localStorage.removeItem('express_active_order_id');
     broadcastSync();
+
+    if (supabase && isSupabaseConfigured) {
+      supabase.from('orders').delete().neq('id', '').then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase resetDemoData error:', error.message);
+      });
+    }
   };
 
   return (
