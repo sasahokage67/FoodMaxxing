@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ArrowLeft, AlertTriangle, QrCode, Clock, Sparkles, Receipt, MessageSquare } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, QrCode, Clock, Sparkles, Receipt, MessageSquare, ShoppingBag } from 'lucide-react';
 import { timeStringToMinutes } from '../../engine/scheduler';
 import { ReceiptCardModal } from './ReceiptCardModal';
 import { WhatsAppPhotoModal } from './WhatsAppPhotoModal';
+import { Order } from '../../types';
 
 export const OrderConfirmation: React.FC = () => {
   const {
@@ -19,15 +20,44 @@ export const OrderConfirmation: React.FC = () => {
   const [showReceipt, setShowReceipt] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
-  const order = orders.find(o => o.id === activeOrderId) || orders[0];
+  const currentActiveId = activeOrderId || localStorage.getItem('express_active_order_id');
+  let order = orders.find(o => o.id === currentActiveId);
+
+  if (!order && orders.length > 0) {
+    order = orders[0];
+  }
+
+  if (!order) {
+    try {
+      const saved = localStorage.getItem('express_orders');
+      if (saved) {
+        const parsed: Order[] = JSON.parse(saved);
+        if (parsed.length > 0) {
+          order = parsed.find(o => o.id === currentActiveId) || parsed[0];
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 
   if (!order) {
     return (
-      <div className="max-w-md mx-auto p-6 text-center">
-        <p className="text-gray-500 text-sm">No active order.</p>
+      <div className="max-w-md mx-auto p-8 text-center space-y-4">
+        <div className="w-14 h-14 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center mx-auto">
+          <ShoppingBag className="w-7 h-7" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-gray-900">
+            {lang === 'kz' ? 'Белсенді тапсырыс табылмады' : lang === 'en' ? 'No active order found' : 'Нет активного заказа'}
+          </h2>
+          <p className="text-xs text-gray-500 mt-1">
+            {lang === 'kz' ? 'Мәзірден жаңа тапсырыс бере аласыз.' : lang === 'en' ? 'You can place a new order from the menu.' : 'Вы можете оформить заказ из меню блюд.'}
+          </p>
+        </div>
         <button
           onClick={() => setCustomerStep('menu')}
-          className="mt-4 px-4 py-2 bg-orange-600 text-white rounded-lg text-xs font-bold"
+          className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
         >
           {t.backToMenu}
         </button>

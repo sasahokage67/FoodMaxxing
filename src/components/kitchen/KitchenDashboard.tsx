@@ -4,7 +4,7 @@ import { timeStringToMinutes } from '../../engine/scheduler';
 import { Clock, CheckCircle2, ArrowRight, BellRing, Layers } from 'lucide-react';
 
 export const KitchenDashboard: React.FC = () => {
-  const { orders, advanceOrderStatus, delayOrder, currentTimeStr, currentTimeFullStr, t, lang } = useApp();
+  const { orders, advanceOrderStatus, delayOrder, currentTimeStr, t, lang } = useApp();
 
   const scheduledOrders = orders.filter(o => o.status === 'SCHEDULED');
   const cookingOrders = orders.filter(o => o.status === 'COOKING');
@@ -28,14 +28,6 @@ export const KitchenDashboard: React.FC = () => {
           <p className="text-xs text-gray-500 mt-1">
             {lang === 'kz' ? 'Тапсырыстарды уақытында басқару терминалы' : lang === 'en' ? 'Real-Time Kitchen Orders & Expediting Terminal' : 'Терминал управления очередью и выдачей заказов'}
           </p>
-        </div>
-
-        <div className="flex items-center space-x-3">
-          {/* Real-time Clock on KDS */}
-          <div className="flex items-center space-x-2 bg-gray-100 px-3 py-2 rounded-xl text-xs font-mono font-bold text-gray-800 border border-gray-200">
-            <Clock className="w-4 h-4 text-orange-600" />
-            <span>{currentTimeFullStr}</span>
-          </div>
         </div>
       </div>
 

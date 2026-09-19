@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
-import { MapPin, Clock, Zap, ArrowRight, ShieldCheck } from 'lucide-react';
+import { MapPin, Clock, ArrowRight } from 'lucide-react';
 
 export const VenueSelect: React.FC = () => {
   const { setCustomerStep, t } = useApp();
@@ -9,29 +9,10 @@ export const VenueSelect: React.FC = () => {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
       {/* Banner */}
       <div className="bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-3xl p-6 sm:p-8 shadow-sm">
-        <div className="inline-flex items-center space-x-1 bg-white/20 px-3 py-1 rounded-full text-xs font-semibold mb-3">
-          <Zap className="w-3.5 h-3.5" />
-          <span>{t.heroBadge}</span>
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-black tracking-tight">{t.heroTitle}</h1>
-        <p className="text-orange-100 text-xs sm:text-sm mt-2 leading-relaxed max-w-2xl">
-          {t.heroDesc}
+        <h1 className="text-2xl sm:text-4xl font-black tracking-tight">FoodMaxxing</h1>
+        <p className="text-orange-100 text-sm sm:text-base mt-2 font-medium leading-relaxed">
+          Maximum food. Minimum waiting
         </p>
-
-        <div className="mt-6 pt-4 border-t border-white/20 grid grid-cols-3 gap-4 text-center text-xs sm:text-sm">
-          <div>
-            <div className="font-extrabold text-base sm:text-lg">{t.badge3steps}</div>
-            <div className="text-orange-100 text-[11px] sm:text-xs">{t.badge3stepsDesc}</div>
-          </div>
-          <div>
-            <div className="font-extrabold text-base sm:text-lg">{t.badgeWait}</div>
-            <div className="text-orange-100 text-[11px] sm:text-xs">{t.badgeWaitDesc}</div>
-          </div>
-          <div>
-            <div className="font-extrabold text-base sm:text-lg">{t.badgeShelf}</div>
-            <div className="text-orange-100 text-[11px] sm:text-xs">{t.badgeShelfDesc}</div>
-          </div>
-        </div>
       </div>
 
       <div className="space-y-3">
@@ -99,16 +80,6 @@ export const VenueSelect: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="bg-gray-50 rounded-xl p-3 border border-gray-200 text-xs text-gray-500 space-y-1">
-        <div className="flex items-center font-semibold text-gray-700 text-[11px]">
-          <ShieldCheck className="w-3.5 h-3.5 text-orange-600 mr-1.5" />
-          {t.noSmsTitle}
-        </div>
-        <p className="text-[11px] leading-relaxed">
-          {t.noSmsDesc}
-        </p>
       </div>
     </div>
   );

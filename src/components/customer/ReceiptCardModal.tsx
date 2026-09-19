@@ -98,11 +98,7 @@ export const ReceiptCardModal: React.FC<ReceiptCardModalProps> = ({ order, isOpe
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('FOODMAXXING', width / 2, cardY + 38);
-
-    ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
-    ctx.fillStyle = '#ffedd5';
-    ctx.fillText(t.brandSubtitle.toUpperCase(), width / 2, cardY + 58);
+    ctx.fillText('FOODMAXXING', width / 2, cardY + 48);
 
     // Order Number
     ctx.fillStyle = '#64748b';
@@ -332,7 +328,7 @@ export const ReceiptCardModal: React.FC<ReceiptCardModalProps> = ({ order, isOpe
         {/* Digital Boarding Pass Ticket Card */}
         <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border-2 border-gray-900 relative">
           {/* Top Brand Header */}
-          <div className="bg-orange-600 text-white p-4 text-center relative">
+          <div className="bg-orange-600 text-white p-4 text-center relative flex items-center justify-center space-x-2">
             <button
               type="button"
               onClick={onClose}
@@ -341,10 +337,8 @@ export const ReceiptCardModal: React.FC<ReceiptCardModalProps> = ({ order, isOpe
             >
               <X className="w-5 h-5" />
             </button>
+            <img src="/logo.png" alt="FoodMaxxing" className="w-6 h-6 rounded-md object-cover" />
             <div className="font-black text-lg tracking-wider">FOODMAXXING</div>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-orange-200 mt-0.5">
-              {t.brandSubtitle}
-            </div>
           </div>
 
           {/* Ticket Body */}

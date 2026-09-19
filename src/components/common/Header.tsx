@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Clock, ChefHat, Smartphone, RotateCcw, Volume2, VolumeX, Receipt, KeyRound, LogOut, X, Lock } from 'lucide-react';
+import { ChefHat, Smartphone, RotateCcw, Volume2, VolumeX, Receipt, KeyRound, LogOut, X, Lock } from 'lucide-react';
 import { Language } from '../../i18n/translations';
 import { PhoneAuthModal } from './PhoneAuthModal';
 
@@ -8,7 +8,6 @@ export const Header: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
-    currentTimeFullStr,
     resetDemoData,
     orders,
     lang,
@@ -67,24 +66,21 @@ export const Header: React.FC = () => {
               className="flex items-center space-x-2.5 cursor-pointer"
               onClick={() => {
                 setActiveTab('customer');
-                if (customerStep === 'history') setCustomerStep('menu');
+                setCustomerStep('venue');
               }}
             >
-              <div className="w-9 h-9 rounded-lg bg-orange-600 flex items-center justify-center text-white font-extrabold text-lg shadow-xs">
-                FM
-              </div>
-              <div>
-                <div className="font-extrabold text-base tracking-tight text-gray-900 leading-none">
-                  {t.brandTitle}
-                </div>
-                <div className="text-[11px] font-semibold text-orange-600 mt-0.5">
-                  {t.brandSubtitle}
-                </div>
-              </div>
+              <img
+                src="/logo.png"
+                alt="FoodMaxxing"
+                className="w-10 h-10 rounded-xl object-cover shadow-xs"
+              />
+              <span className="font-extrabold text-lg tracking-tight text-gray-900 leading-none">
+                FoodMaxxing
+              </span>
             </div>
 
-            {/* Tri-Lingual Switcher & Mobile Real-Time Clock */}
-            <div className="flex items-center space-x-2">
+            {/* Tri-Lingual Switcher */}
+            <div className="flex items-center space-x-2 ml-4 md:ml-8">
               {/* Lang switcher */}
               <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-[11px] font-bold">
                 {(['kz', 'ru', 'en'] as Language[]).map(l => (
@@ -101,12 +97,6 @@ export const Header: React.FC = () => {
                   </button>
                 ))}
               </div>
-
-              {/* Mobile real-time clock */}
-              <div className="flex md:hidden items-center space-x-1.5 bg-gray-100 px-2 py-1 rounded-md text-xs font-mono font-semibold text-gray-800">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>{currentTimeFullStr}</span>
-              </div>
             </div>
           </div>
 
@@ -115,7 +105,7 @@ export const Header: React.FC = () => {
             <button
               onClick={() => {
                 setActiveTab('customer');
-                if (customerStep === 'history') setCustomerStep('menu');
+                setCustomerStep('venue');
               }}
               className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                 activeTab === 'customer' && customerStep !== 'history'
@@ -189,14 +179,8 @@ export const Header: React.FC = () => {
             )}
           </nav>
 
-          {/* Desktop Tools: Real-Time Clock, Sound Toggle, Staff Access / Exit, Reset Demo */}
+          {/* Desktop Tools: Sound Toggle, Staff Access / Exit, Reset Demo */}
           <div className="hidden md:flex items-center space-x-2.5">
-            {/* Live Real-Time Clock */}
-            <div className="flex items-center space-x-2 bg-gray-100 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-mono">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" title={t.liveClock} />
-              <Clock className="w-3.5 h-3.5 text-gray-500" />
-              <span className="font-extrabold text-gray-900 tracking-wider">{currentTimeFullStr}</span>
-            </div>
 
             {/* Staff Access / Role Switcher */}
             {userRole === 'customer' ? (

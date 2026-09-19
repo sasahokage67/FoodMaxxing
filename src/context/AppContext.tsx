@@ -18,6 +18,7 @@ export interface AppContextType {
   customerId: string;
   customerPhone: string;
   linkCustomerPhone: (phone: string) => void;
+  logoutCustomer: () => void;
   customerStep: 'venue' | 'menu' | 'slot' | 'confirm' | 'tracking' | 'ready' | 'history';
   activeOrderId: string | null;
   myOrderIds: string[];
@@ -60,66 +61,7 @@ export interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function getInitialOrders(): Order[] {
-  const now = new Date();
-  const currentTotalMins = now.getHours() * 60 + now.getMinutes();
-
-  const timeReady = minutesToTimeString(currentTotalMins - 2);
-  const timeCooking = minutesToTimeString(currentTotalMins + 8);
-  const timeScheduled = minutesToTimeString(currentTotalMins + 20);
-
-  return [
-    {
-      id: 'ord_181',
-      orderNumber: '181',
-      customerName: 'Асель К.',
-      items: [
-        { menuItemId: 'm6', name: 'Салат Цезарь с курицей', quantity: 1, unitPrice: 1800, prepMinutes: 7, station: 'prep' },
-        { menuItemId: 'm8', name: 'Домашний лимонад с мятой', quantity: 1, unitPrice: 650, prepMinutes: 2, station: 'coffee' }
-      ],
-      totalAmount: 2450,
-      requestedPickupTime: timeReady,
-      status: 'READY',
-      estimatedReadyTime: minutesToTimeString(currentTotalMins - 4),
-      scheduledFireTime: minutesToTimeString(currentTotalMins - 11),
-      shelfBay: 'Полка A1',
-      delayMinutes: 0,
-      createdAt: Date.now() - 15 * 60 * 1000,
-      cookingStartedAt: Date.now() - 8 * 60 * 1000,
-      readyAt: Date.now() - 2 * 60 * 1000,
-    },
-    {
-      id: 'ord_182',
-      orderNumber: '182',
-      customerName: 'Данияр М.',
-      items: [
-        { menuItemId: 'm2', name: 'Двойной чизбургер с дымком', quantity: 1, unitPrice: 2400, prepMinutes: 14, station: 'grill' },
-        { menuItemId: 'm5', name: 'Хрустящие луковые кольца', quantity: 1, unitPrice: 950, prepMinutes: 6, station: 'fryer' }
-      ],
-      totalAmount: 3350,
-      requestedPickupTime: timeCooking,
-      status: 'COOKING',
-      estimatedReadyTime: minutesToTimeString(currentTotalMins + 6),
-      scheduledFireTime: minutesToTimeString(currentTotalMins - 8),
-      delayMinutes: 0,
-      createdAt: Date.now() - 8 * 60 * 1000,
-      cookingStartedAt: Date.now() - 4 * 60 * 1000,
-    },
-    {
-      id: 'ord_183',
-      orderNumber: '183',
-      customerName: 'Elena R.',
-      items: [
-        { menuItemId: 'm3', name: 'Пицца Пепперони из печи', quantity: 1, unitPrice: 2800, prepMinutes: 20, station: 'oven' }
-      ],
-      totalAmount: 2800,
-      requestedPickupTime: timeScheduled,
-      status: 'SCHEDULED',
-      estimatedReadyTime: minutesToTimeString(currentTotalMins + 18),
-      scheduledFireTime: minutesToTimeString(currentTotalMins - 2),
-      delayMinutes: 0,
-      createdAt: Date.now() - 2 * 60 * 1000,
-    }
-  ];
+  return [];
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -141,10 +83,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_STATIONS;
   });
 
+  const isLegacyMockOrder = (o: Order) => {
+    const name = o.customerName?.toLowerCase() || '';
+    if (name.includes('елена') || name.includes('elena') || name.includes('асель') || name.includes('данияр')) {
+      return true;
+    }
+    if ((o.id === 'ord_181' || o.id === 'ord_182' || o.id === 'ord_183') && (!o.createdAt || o.createdAt < 1700000000000)) {
+      return true;
+    }
+    return false;
+  };
+
   const [menuItems] = useState<MenuItem[]>(MENU_ITEMS);
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('express_orders');
-    return saved ? JSON.parse(saved) : getInitialOrders();
+    if (!saved) return [];
+    try {
+      const parsed: Order[] = JSON.parse(saved);
+      const filtered = parsed.filter(o => !isLegacyMockOrder(o));
+      localStorage.setItem('express_orders', JSON.stringify(filtered));
+      return filtered;
+    } catch {
+      return [];
+    }
   });
 
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -167,8 +128,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [activeTab, setActiveTab] = useState<'customer' | 'kitchen'>('customer');
-  // Default step: directly to menu (eliminates unnecessary zone/venue screen)
-  const [customerStep, setCustomerStep] = useState<'venue' | 'menu' | 'slot' | 'confirm' | 'tracking' | 'ready' | 'history'>('menu');
+  // Default step: directly to venue selection
+  const [customerStep, setCustomerStep] = useState<'venue' | 'menu' | 'slot' | 'confirm' | 'tracking' | 'ready' | 'history'>('venue');
   const [activeOrderId, setActiveOrderId] = useState<string | null>(() => {
     return localStorage.getItem('express_active_order_id') || null;
   });
@@ -183,9 +144,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return localStorage.getItem('express_customer_phone') || '';
   });
 
+  const logoutCustomer = () => {
+    setCustomerPhone('');
+    localStorage.removeItem('express_customer_phone');
+    localStorage.removeItem('express_active_order_id');
+    localStorage.removeItem('express_my_order_ids');
+    setActiveOrderId(null);
+    setMyOrderIds([]);
+  };
+
   const linkCustomerPhone = (phone: string) => {
     const cleanPhone = phone.trim();
-    if (!cleanPhone) return;
+    if (!cleanPhone) {
+      logoutCustomer();
+      return;
+    }
     setCustomerPhone(cleanPhone);
     localStorage.setItem('express_customer_phone', cleanPhone);
     setOrders(prev => {
@@ -234,6 +207,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentDate(new Date());
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Immediate purge of any legacy mock orders on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('express_orders');
+      if (saved) {
+        const parsed: Order[] = JSON.parse(saved);
+        const filtered = parsed.filter(o => !isLegacyMockOrder(o));
+        if (filtered.length !== parsed.length) {
+          localStorage.setItem('express_orders', JSON.stringify(filtered));
+          setOrders(filtered);
+        }
+      }
+    } catch {
+      // ignore
+    }
   }, []);
 
   const currentTimeStr = `${String(currentDate.getHours()).padStart(2, '0')}:${String(currentDate.getMinutes()).padStart(2, '0')}`;
@@ -358,8 +348,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     customerPhone?: string;
     pickupTime: string;
   }): Order => {
-    const orderNum = (180 + orders.length + 1).toString();
-    const id = `ord_${orderNum}`;
+    // Generate clean 3-digit ticket numbers (starting from 201, e.g. #201, #202, #203)
+    let nextNum = 201;
+    if (orders.length > 0) {
+      const nums = orders.map(o => parseInt(o.orderNumber, 10)).filter(n => !isNaN(n) && n >= 200);
+      if (nums.length > 0) {
+        nextNum = Math.max(...nums) + 1;
+      }
+    }
+    const orderNum = nextNum.toString();
+    const id = `ord_${Date.now()}_${orderNum}`;
 
     const jit = calculateJITSchedule(pickupTime, cart);
     const total = cart.reduce((acc, ci) => acc + ci.menuItem.price * ci.quantity, 0);
@@ -393,9 +391,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       linkCustomerPhone(customerPhone.trim());
     }
 
-    setOrders(prev => [newOrder, ...prev]);
+    setOrders(prev => {
+      const updated = [newOrder, ...prev];
+      try {
+        localStorage.setItem('express_orders', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+      return updated;
+    });
+
     setActiveOrderId(newOrder.id);
-    setMyOrderIds(prev => [newOrder.id, ...prev.filter(id => id !== newOrder.id)]);
+    setMyOrderIds(prev => [newOrder.id, ...prev.filter(myId => myId !== newOrder.id)]);
+    try {
+      localStorage.setItem('express_active_order_id', newOrder.id);
+    } catch {
+      // ignore
+    }
+
     clearCart();
     playNewOrderSound();
     return newOrder;
@@ -564,6 +577,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         customerId,
         customerPhone,
         linkCustomerPhone,
+        logoutCustomer,
         customerStep,
         activeOrderId,
         myOrderIds,

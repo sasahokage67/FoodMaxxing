@@ -1,15 +1,24 @@
-﻿import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Smartphone, X, CheckCircle2, ShieldCheck, ArrowRight, RotateCcw, KeyRound, Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const { lang, customerPhone, linkCustomerPhone, myOrderIds, setCustomerStep } = useApp();
+  const { lang, customerPhone, linkCustomerPhone, logoutCustomer, myOrderIds, setCustomerStep } = useApp();
 
   const [phoneInput, setPhoneInput] = useState(customerPhone || '');
   const [step, setStep] = useState<'phone' | 'otp' | 'success'>('phone');
   const [otpCode, setOtpCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setPhoneInput(customerPhone || '');
+      setStep('phone');
+      setOtpCode('');
+      setErrorMsg('');
+    }
+  }, [isOpen, customerPhone]);
 
   if (!isOpen) return null;
 
@@ -44,8 +53,9 @@ export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
   };
 
   const handleLogout = () => {
-    linkCustomerPhone('');
+    logoutCustomer();
     setPhoneInput('');
+    setOtpCode('');
     setStep('phone');
     onClose();
   };

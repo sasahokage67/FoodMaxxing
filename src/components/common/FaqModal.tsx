@@ -63,9 +63,9 @@ const FAQ_ITEMS: FaqItem[] = [
     qRu: 'Как подключить свою столовую к FoodMaxxing?',
     qKz: 'Өз асханамды FoodMaxxing жүйесіне қалай қосуға болады?',
     qEn: 'How can a cafeteria join the FoodMaxxing network?',
-    aRu: 'Нажмите Зарегистрировать кухню в нижней панели, укажите название заведения и контактный телефон. Наша команда развернет KDS-терминал для поваров и настроит оборудование за 1 рабочий день.',
-    aKz: 'Төменгі панельдегі Асхананы тіркеу түймесін басып, мәліметтерді қалдырыңыз. Біздің топ 1 күнде KDS терминалын орнатып береді.',
-    aEn: 'Click Register Kitchen in the bottom panel. Our engineering team provisions the cook KDS terminal and capacity slots within one business day.'
+    aRu: 'Нажмите Зарегистрировать кухню в нижней панели, укажите название заведения и контактный телефон. Наша команда развернет терминал заказов для поваров и настроит оборудование за 1 рабочий день.',
+    aKz: 'Төменгі панельдегі Асхананы тіркеу түймесін басып, мәліметтерді қалдырыңыз. Біздің топ 1 күнде тапсырыстар терминалын орнатып береді.',
+    aEn: 'Click Register Kitchen in the bottom panel. Our engineering team provisions the kitchen order terminal and capacity slots within one business day.'
   }
 ];
 

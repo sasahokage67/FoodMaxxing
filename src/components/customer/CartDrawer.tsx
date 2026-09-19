@@ -10,6 +10,7 @@ export const CartDrawer: React.FC = () => {
     stations,
     currentTimeStr,
     createOrder,
+    setActiveOrderId,
     setCustomerStep,
     updateCartQuantity,
     getItemName,
@@ -65,14 +66,17 @@ export const CartDrawer: React.FC = () => {
     setOrderSubmitting(true);
 
     setTimeout(() => {
-      createOrder({
+      const newOrder = createOrder({
         customerName: customerName || (lang === 'kz' ? 'Студент' : lang === 'en' ? 'Student' : 'Студент'),
         customerPhone,
         pickupTime: selectedSlot
       });
+      if (newOrder && newOrder.id) {
+        setActiveOrderId(newOrder.id);
+      }
       setOrderSubmitting(false);
       setCustomerStep('tracking');
-    }, 350);
+    }, 250);
   };
 
   return (

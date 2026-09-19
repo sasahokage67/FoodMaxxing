@@ -19,9 +19,11 @@ export const Footer: React.FC = () => {
             {/* Col 1: Brand Info (Left side, matching Clipr style) */}
             <div className="md:col-span-5 space-y-4">
               <div className="flex items-center space-x-2.5">
-                <div className="w-8 h-8 rounded-lg bg-orange-600 flex items-center justify-center text-white font-black text-sm shadow-md">
-                  FM
-                </div>
+                <img
+                  src="/logo.png"
+                  alt="FoodMaxxing"
+                  className="w-8 h-8 rounded-lg object-cover shadow-md"
+                />
                 <span className="text-white font-black text-lg tracking-tight">FoodMaxxing</span>
               </div>
 
@@ -32,13 +34,6 @@ export const Footer: React.FC = () => {
                   ? 'Maximum food. Minimum waiting. High-throughput JIT express pickup platform eliminating cafeteria rush queues.'
                   : 'Maximum food. Minimum waiting. Платформа синхронизации предзаказов и кухни для столовых университетов и бизнес-центров.'}
               </p>
-
-              <div className="pt-2">
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-gray-900 border border-gray-800 text-gray-300">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse" />
-                  Production Edition • V1.0
-                </span>
-              </div>
             </div>
 
             {/* Col 2: Product */}

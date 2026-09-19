@@ -16,7 +16,8 @@ export const MyOrdersList: React.FC = () => {
     lang,
     customerId,
     customerPhone,
-    linkCustomerPhone
+    linkCustomerPhone,
+    logoutCustomer
   } = useApp();
 
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState<Order | null>(null);
@@ -31,8 +32,11 @@ export const MyOrdersList: React.FC = () => {
 
   // Filter user orders: strictly matching client account customerId or explicit user orders
   const userOrders = orders.filter(o => {
-    // Exclude pre-seeded kitchen demo orders
-    if (['ord_181', 'ord_182', 'ord_183'].includes(o.id)) return false;
+    // Exclude legacy pre-seeded demo orders only
+    const name = o.customerName?.toLowerCase() || '';
+    if (name.includes('елена') || name.includes('elena') || name.includes('асель') || name.includes('данияр')) {
+      return false;
+    }
     // Match customerId, phone, or orders created on this client device
     if (o.customerId && o.customerId === customerId) return true;
     if (customerPhone && o.customerPhone && o.customerPhone === customerPhone) return true;
@@ -104,17 +108,43 @@ export const MyOrdersList: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => {
-            setPhoneInput(customerPhone || '');
-            setSmsSent(false);
-            setSmsInput('');
-            setIsPhoneModalOpen(true);
-          }}
-          className="px-2.5 py-1.5 rounded-xl bg-white border border-orange-300 text-orange-700 font-bold text-[11px] shadow-2xs hover:bg-orange-100 transition-all flex-shrink-0"
-        >
-          {customerPhone ? 'Изменить' : t.phoneLoginBtn}
-        </button>
+        {customerPhone ? (
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => {
+                logoutCustomer();
+                setToastMsg(lang === 'kz' ? 'Аккаунттан сәтті шықтыңыз' : lang === 'en' ? 'Logged out successfully' : 'Вы успешно вышли из аккаунта');
+                setTimeout(() => setToastMsg(null), 3000);
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-white border border-red-200 text-red-600 font-bold text-[11px] shadow-2xs hover:bg-red-50 transition-all flex-shrink-0"
+            >
+              {lang === 'kz' ? 'Шығу' : lang === 'en' ? 'Log out' : 'Выйти'}
+            </button>
+            <button
+              onClick={() => {
+                setPhoneInput(customerPhone || '');
+                setSmsSent(false);
+                setSmsInput('');
+                setIsPhoneModalOpen(true);
+              }}
+              className="px-2.5 py-1.5 rounded-xl bg-white border border-orange-300 text-orange-700 font-bold text-[11px] shadow-2xs hover:bg-orange-100 transition-all flex-shrink-0"
+            >
+              {lang === 'kz' ? 'Өзгерту' : lang === 'en' ? 'Change' : 'Изменить'}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => {
+              setPhoneInput('');
+              setSmsSent(false);
+              setSmsInput('');
+              setIsPhoneModalOpen(true);
+            }}
+            className="px-2.5 py-1.5 rounded-xl bg-white border border-orange-300 text-orange-700 font-bold text-[11px] shadow-2xs hover:bg-orange-100 transition-all flex-shrink-0"
+          >
+            {t.phoneLoginBtn}
+          </button>
+        )}
       </div>
 
       {userOrders.length === 0 ? (
@@ -366,19 +396,35 @@ export const MyOrdersList: React.FC = () => {
               </div>
 
               {!smsSent ? (
-                <button
-                  type="button"
-                  disabled={!phoneInput.trim()}
-                  onClick={() => {
-                    if (phoneInput.trim()) {
-                      setSmsSent(true);
-                      setSmsInput('2026'); // auto-fill demo code for seamless pitch
-                    }
-                  }}
-                  className="w-full bg-orange-600 hover:bg-orange-700 active:scale-98 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all disabled:opacity-50 shadow-xs"
-                >
-                  Получить SMS-код
-                </button>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={!phoneInput.trim()}
+                    onClick={() => {
+                      if (phoneInput.trim()) {
+                        setSmsSent(true);
+                        setSmsInput('2026'); // auto-fill demo code for seamless pitch
+                      }
+                    }}
+                    className="w-full bg-orange-600 hover:bg-orange-700 active:scale-98 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all disabled:opacity-50 shadow-xs"
+                  >
+                    Получить SMS-код
+                  </button>
+                  {customerPhone && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        logoutCustomer();
+                        setIsPhoneModalOpen(false);
+                        setToastMsg(lang === 'kz' ? 'Аккаунттан шықтыңыз' : lang === 'en' ? 'Logged out' : 'Вы вышли из аккаунта');
+                        setTimeout(() => setToastMsg(null), 3000);
+                      }}
+                      className="w-full bg-white hover:bg-red-50 text-red-600 border border-red-200 font-bold py-2 rounded-xl text-xs transition-all"
+                    >
+                      {lang === 'kz' ? 'Аккаунттан шығу' : lang === 'en' ? 'Log out of account' : 'Выйти из аккаунта'}
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="space-y-2.5 pt-1 animate-in fade-in">
                   <div className="flex items-center justify-between">

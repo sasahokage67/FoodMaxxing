@@ -59,11 +59,7 @@ export const createReceiptCanvas = (
   ctx.fillStyle = '#FFFFFF';
   ctx.font = 'bold 22px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('FOODMAXXING', width / 2, cardY + 38);
-
-  ctx.font = 'bold 12px system-ui, -apple-system, sans-serif';
-  ctx.fillStyle = '#ffedd5';
-  ctx.fillText(t.brandSubtitle.toUpperCase(), width / 2, cardY + 58);
+  ctx.fillText('FOODMAXXING', width / 2, cardY + 48);
 
   // Order Number
   ctx.fillStyle = '#64748b';

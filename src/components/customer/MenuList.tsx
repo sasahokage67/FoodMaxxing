@@ -45,9 +45,11 @@ export const MenuList: React.FC = () => {
           className="flex items-center space-x-3 cursor-pointer group p-2 -m-2 rounded-2xl hover:bg-gray-100 transition-all"
           title={lang === 'kz' ? 'Асхананы таңдау үшін басыңыз' : lang === 'en' ? 'Click to select venue' : 'Нажмите для выбора общепита'}
         >
-          <div className="w-11 h-11 rounded-2xl bg-orange-600 text-white flex items-center justify-center font-black text-base shadow-sm group-hover:scale-105 transition-transform flex-shrink-0">
-            FM
-          </div>
+          <img
+            src="/logo.png"
+            alt="FoodMaxxing"
+            className="w-11 h-11 rounded-2xl object-cover shadow-sm group-hover:scale-105 transition-transform flex-shrink-0"
+          />
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-xl font-black text-gray-900 leading-tight group-hover:text-orange-600 transition-colors">
