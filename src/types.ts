@@ -34,6 +34,8 @@ export interface MenuItem {
   isHalal?: boolean;
   isVegetarian?: boolean;
   isHit?: boolean;
+  venueId?: string;
+  venueName?: string;
 }
 
 export interface CartItem {
@@ -60,6 +62,8 @@ export interface Order {
   customerId?: string; // unique device/account ID
   customerName: string;
   customerPhone?: string;
+  venueId?: string;
+  venueName?: string;
   items: OrderItemRecord[];
   totalAmount: number;
   requestedPickupTime: string; // "12:45"
@@ -101,4 +105,28 @@ export interface SimulationResult {
   express: SimulationMetrics;
   throughputIncreasePercent: number;
   waitTimeReductionPercent: number;
+}
+
+export interface KitchenInquiry {
+  id: string;
+  kitchenName: string;
+  locationName: string;
+  contactName: string;
+  phone: string;
+  aiVerified: boolean;
+  binIin?: string | null;
+  okedCode?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export interface Venue {
+  id: string;
+  name: string;
+  location: string;
+  phone: string;
+  isActive: boolean;
+  isPrimary?: boolean;
+  prepTime?: string;
+  openingHours?: string;
 }

@@ -384,7 +384,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     passcardFooter: 'Бұл экранды қызметкерге көрсетіңіз. Алып кету уақыты: 30 секундқа дейін.',
     backToStatus: 'Күйге қайту',
 
-    kdsTitle: 'FOODMAXXING АСХАНА ЭКРАНЫ',
+    kdsTitle: 'Университет бас асханасы',
     kdsSubtitle: 'Тапсырыстарды станциялар мен сөрелер бойынша синхрондау',
     liveBadge: '● Линия қосулы',
     scannerBtn: 'Беру сканері',
@@ -601,7 +601,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     passcardFooter: 'Покажите этот экран сотруднику или терминалу выдачи. Время получения: до 30 секунд.',
     backToStatus: 'К статусу заказа',
 
-    kdsTitle: 'FOODMAXXING КУХОННЫЙ ЭКРАН',
+    kdsTitle: 'Главная университетская столовая',
     kdsSubtitle: 'Синхронизация заказов по станциям и полкам выдачи',
     liveBadge: '● Линия онлайн',
     scannerBtn: 'Сканер выдачи',
@@ -818,7 +818,7 @@ export const TRANSLATIONS: Record<Language, Translations> = {
     passcardFooter: 'Show this passcard to staff or shelf scanner to collect in under 30 seconds.',
     backToStatus: 'Back to Status',
 
-    kdsTitle: 'FOODMAXXING KITCHEN DISPLAY',
+    kdsTitle: 'Main University Cafeteria',
     kdsSubtitle: 'Synchronized JIT Food Preparation & Shelf Staging',
     liveBadge: '● Live Line Active',
     scannerBtn: 'Open Pickup Scanner',

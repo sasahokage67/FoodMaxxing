@@ -2,14 +2,18 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { FaqModal } from './FaqModal';
 import { KitchenRegisterModal } from './KitchenRegisterModal';
+import { KitchenPhoneAuthModal } from './KitchenPhoneAuthModal';
 import { PhoneAuthModal } from './PhoneAuthModal';
-import { ChefHat, HelpCircle, Smartphone, ShieldCheck, ArrowUpRight, ExternalLink } from 'lucide-react';
+import { PrivacyPolicyModal } from './PrivacyPolicyModal';
+import { ChefHat, HelpCircle, Smartphone, ShieldCheck, ArrowUpRight, ExternalLink, Shield, Phone } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { lang, setActiveTab, setCustomerStep, userRole } = useApp();
+  const { lang, setActiveTab, setCustomerStep, userRole, enterAdminMode } = useApp();
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [isKitchenRegisterOpen, setIsKitchenRegisterOpen] = useState(false);
+  const [isKitchenPhoneAuthOpen, setIsKitchenPhoneAuthOpen] = useState(false);
   const [isPhoneAuthOpen, setIsPhoneAuthOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
 
   return (
     <>
@@ -89,11 +93,32 @@ export const Footer: React.FC = () => {
               <ul className="space-y-2">
                 <li>
                   <button
-                    onClick={() => setIsKitchenRegisterOpen(true)}
-                    className="text-orange-400 hover:text-orange-300 font-bold transition-colors flex items-center space-x-1.5"
+                    onClick={() => setIsKitchenPhoneAuthOpen(true)}
+                    className="text-white hover:text-orange-400 font-bold transition-colors flex items-center space-x-1.5"
                   >
-                    <ChefHat className="w-4 h-4" />
+                    <ChefHat className="w-4 h-4 text-orange-500" />
+                    <span>{lang === 'kz' ? 'Асхана экранына кіру (нөмірмен)' : lang === 'en' ? 'Kitchen Terminal Login (by phone)' : 'Вход на кухню (по номеру)'}</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => setIsKitchenRegisterOpen(true)}
+                    className="text-orange-400 hover:text-orange-300 font-semibold transition-colors flex items-center space-x-1.5"
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5" />
                     <span>{lang === 'kz' ? 'Асхананы тіркеу' : lang === 'en' ? 'Register Cafeteria' : 'Зарегистрировать кухню'}</span>
+                  </button>
+                </li>
+                <li>
+                  <button
+                    onClick={() => {
+                      enterAdminMode();
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="text-gray-400 hover:text-amber-400 text-xs font-medium transition-colors flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-gray-500 hover:text-amber-400" />
+                    <span>{lang === 'kz' ? 'Әкімшілік' : lang === 'en' ? 'Administration' : 'Панель управления'}</span>
                   </button>
                 </li>
               </ul>
@@ -124,6 +149,15 @@ export const Footer: React.FC = () => {
                   </button>
                 </li>
                 <li>
+                  <button
+                    onClick={() => setIsPrivacyOpen(true)}
+                    className="text-gray-300 hover:text-white transition-colors flex items-center space-x-1"
+                  >
+                    <Shield className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{lang === 'kz' ? 'Құпиялылық саясаты' : lang === 'en' ? 'Privacy Policy' : 'Политика конфиденциальности'}</span>
+                  </button>
+                </li>
+                <li>
                   <span className="text-gray-500 flex items-center space-x-1 text-[11px]">
                     <ShieldCheck className="w-3 h-3 text-emerald-500" />
                     <span>{lang === 'kz' ? 'Жүйе штатты істеп тұр' : lang === 'en' ? 'All systems operational' : 'Система работает штатно'}</span>
@@ -139,11 +173,23 @@ export const Footer: React.FC = () => {
               © 2026 FoodMaxxing. {lang === 'kz' ? 'Барлық құқықтар қорғалған.' : lang === 'en' ? 'All rights reserved.' : 'Все права защищены.'}
             </div>
             <div className="flex items-center space-x-4">
+              <button onClick={() => setIsPrivacyOpen(true)} className="hover:text-gray-300 transition-colors underline-offset-2 hover:underline">
+                {lang === 'kz' ? 'Құпиялылық' : lang === 'en' ? 'Privacy Policy' : 'Конфиденциальность'}
+              </button>
               <button onClick={() => setIsFaqOpen(true)} className="hover:text-gray-300 transition-colors">
                 FAQ
               </button>
               <button onClick={() => setIsKitchenRegisterOpen(true)} className="hover:text-gray-300 transition-colors">
-                Партнерам
+                {lang === 'kz' ? 'Серіктестерге' : lang === 'en' ? 'Partners' : 'Партнерам'}
+              </button>
+              <button
+                onClick={() => {
+                  enterAdminMode();
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="text-amber-400 hover:text-amber-300 font-bold transition-colors cursor-pointer"
+              >
+                {lang === 'kz' ? 'Әкімшілік' : lang === 'en' ? 'Admin' : 'Админ'}
               </button>
               <span>Just-In-Time Scheduling</span>
             </div>
@@ -154,7 +200,9 @@ export const Footer: React.FC = () => {
       {/* Modals */}
       <FaqModal isOpen={isFaqOpen} onClose={() => setIsFaqOpen(false)} />
       <KitchenRegisterModal isOpen={isKitchenRegisterOpen} onClose={() => setIsKitchenRegisterOpen(false)} />
+      <KitchenPhoneAuthModal isOpen={isKitchenPhoneAuthOpen} onClose={() => setIsKitchenPhoneAuthOpen(false)} />
       <PhoneAuthModal isOpen={isPhoneAuthOpen} onClose={() => setIsPhoneAuthOpen(false)} />
+      <PrivacyPolicyModal isOpen={isPrivacyOpen} onClose={() => setIsPrivacyOpen(false)} />
     </>
   );
 };

@@ -3,8 +3,11 @@
 -- Вставьте этот код в Supabase -> SQL Editor -> Run
 -- =========================================================
 
--- 1. Создание таблицы заказов
-create table if not exists public.orders (
+-- 1. Удаление старой таблицы, если уже существует (предотвращает ошибку 42P07: relation "orders" already exists)
+drop table if exists public.orders cascade;
+
+-- 2. Создание таблицы заказов
+create table public.orders (
   id text primary key,
   order_number text not null,
   customer_id text,
@@ -26,10 +29,10 @@ create table if not exists public.orders (
   actual_wait_time_seconds integer
 );
 
--- 2. Включение Row Level Security (RLS)
+-- 3. Включение Row Level Security (RLS)
 alter table public.orders enable row level security;
 
--- 3. Политика доступа (разрешает чтение, добавление и изменение для анонимного ключа)
+-- 4. Политика доступа (разрешает чтение, добавление и изменение для анонимного ключа)
 drop policy if exists "Allow public all access" on public.orders;
 create policy "Allow public all access"
 on public.orders
@@ -38,5 +41,13 @@ to anon
 using (true)
 with check (true);
 
--- 4. Включение Realtime (мгновенные уведомления без перезагрузки)
-alter publication supabase_realtime add table public.orders;
+-- 5. Включение Realtime (безопасное добавление без ошибок)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables 
+    where pubname = 'supabase_realtime' and tablename = 'orders'
+  ) then
+    alter publication supabase_realtime add table public.orders;
+  end if;
+end $$;

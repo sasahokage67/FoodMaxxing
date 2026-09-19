@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { ChefHat, X, CheckCircle2, Building2, MapPin, User, Phone, ArrowRight, UploadCloud, FileCheck, ShieldCheck, AlertCircle, ScanLine, RefreshCw } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { DocumentVerificationResult, analyzeDocumentImage } from '../../utils/aiDocumentVerifier';
@@ -82,6 +82,7 @@ export const KitchenRegisterModal: React.FC<{ isOpen: boolean; onClose: () => vo
       aiVerified: verificationResult?.isValid || false,
       binIin: verificationResult?.binIin || null,
       okedCode: verificationResult?.okedCode || null,
+      status: 'pending',
       createdAt: new Date().toISOString()
     });
     localStorage.setItem('foodmaxxing_kitchen_inquiries', JSON.stringify(inquiries));

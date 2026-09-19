@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, isUserOrder } from '../../context/AppContext';
 import { Order } from '../../types';
 import { ReceiptCardModal } from './ReceiptCardModal';
 import { WhatsAppPhotoModal } from './WhatsAppPhotoModal';
 import { ArrowLeft, Clock, MapPin, Receipt, ArrowRight, ShoppingBag, Sparkles, MessageSquare, AlertTriangle, Phone, CheckCircle2, X } from 'lucide-react';
+import { formatPhoneNumber } from '../../utils/phoneFormatter';
 
 export const MyOrdersList: React.FC = () => {
   const {
@@ -26,23 +27,12 @@ export const MyOrdersList: React.FC = () => {
 
   // Phone linking modal state
   const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
-  const [phoneInput, setPhoneInput] = useState(customerPhone || '');
+  const [phoneInput, setPhoneInput] = useState(customerPhone ? formatPhoneNumber(customerPhone) : '+7 (');
   const [smsInput, setSmsInput] = useState('');
   const [smsSent, setSmsSent] = useState(false);
 
-  // Filter user orders: strictly matching client account customerId or explicit user orders
-  const userOrders = orders.filter(o => {
-    // Exclude legacy pre-seeded demo orders only
-    const name = o.customerName?.toLowerCase() || '';
-    if (name.includes('елена') || name.includes('elena') || name.includes('асель') || name.includes('данияр')) {
-      return false;
-    }
-    // Match customerId, phone, or orders created on this client device
-    if (o.customerId && o.customerId === customerId) return true;
-    if (customerPhone && o.customerPhone && o.customerPhone === customerPhone) return true;
-    if (myOrderIds && myOrderIds.includes(o.id) && !o.customerId) return true;
-    return false;
-  });
+  // Filter user orders: matching customerId, phone number, or myOrderIds
+  const userOrders = orders.filter(o => isUserOrder(o, customerPhone, customerId, myOrderIds));
 
   const activeOrders = userOrders.filter(
     o => o.status === 'SCHEDULED' || o.status === 'COOKING' || o.status === 'READY'
@@ -389,9 +379,11 @@ export const MyOrdersList: React.FC = () => {
                 <input
                   type="tel"
                   value={phoneInput}
-                  onChange={e => setPhoneInput(e.target.value)}
-                  placeholder="+7 (777) 123-4567"
-                  className="w-full text-xs font-semibold px-3.5 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-orange-500"
+                  onChange={e => setPhoneInput(formatPhoneNumber(e.target.value))}
+                  onFocus={() => { if (!phoneInput) setPhoneInput('+7 ('); }}
+                  onBlur={() => { if (phoneInput === '+7 (' || phoneInput === '+7') setPhoneInput(''); }}
+                  placeholder="+7 (7XX) XXX-XX-XX"
+                  className="w-full text-xs font-bold font-mono px-3.5 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:border-orange-500"
                 />
               </div>
 

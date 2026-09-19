@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, isUserOrder } from '../../context/AppContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { ArrowLeft, MapPin, Receipt, MessageSquare } from 'lucide-react';
 import { ReceiptCardModal } from './ReceiptCardModal';
 import { WhatsAppPhotoModal } from './WhatsAppPhotoModal';
 
 export const ReadyPasscard: React.FC = () => {
-  const { orders, activeOrderId, setCustomerStep, t } = useApp();
+  const { orders, activeOrderId, setCustomerStep, t, customerPhone, customerId, myOrderIds } = useApp();
   const [showReceipt, setShowReceipt] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
-  const order = orders.find(o => o.id === activeOrderId) || orders[0];
+
+  const userOrders = orders.filter(o => isUserOrder(o, customerPhone, customerId, myOrderIds));
+  const order = userOrders.find(o => o.id === activeOrderId) || userOrders.find(o => o.status === 'READY') || userOrders[0];
 
   if (!order) return null;
 

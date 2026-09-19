@@ -1,10 +1,57 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { CartItem, MenuItem, Order, Station, StationId, UserRole } from '../types';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { CartItem, MenuItem, Order, Station, StationId, UserRole, KitchenInquiry, Venue } from '../types';
 import { INITIAL_STATIONS, MENU_ITEMS, SHELF_BAYS_RU, SHELF_BAYS_KZ, SHELF_BAYS_EN } from '../data/initialData';
 import { calculateJITSchedule, minutesToTimeString, timeStringToMinutes } from '../engine/scheduler';
 import { Language, Translations, TRANSLATIONS } from '../i18n/translations';
 import { playNewOrderSound, playOrderReadySound, playPickupSuccessSound, isSoundEnabled, setSoundEnabled } from '../utils/audio';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { phonesMatch, normalizePhoneDigits, ADMIN_PHONE, isAdminPhone } from '../utils/phoneFormatter';
+
+export const isLegacyMockOrder = (o: Order) => {
+  const name = o.customerName?.toLowerCase() || '';
+  if (name.includes('елена') || name.includes('elena') || name.includes('асель') || name.includes('данияр')) {
+    return true;
+  }
+  if ((o.id === 'ord_181' || o.id === 'ord_182' || o.id === 'ord_183') && (!o.createdAt || o.createdAt < 1700000000000)) {
+    return true;
+  }
+  return false;
+};
+
+export function isUserOrder(
+  order: Order,
+  customerPhone?: string,
+  customerId?: string,
+  myOrderIds: string[] = []
+): boolean {
+  if (isLegacyMockOrder(order)) return false;
+
+  // 1. If currently logged in with a customer phone number:
+  if (customerPhone && customerPhone.trim()) {
+    // If the order has a customerPhone, it MUST match the logged in phone!
+    if (order.customerPhone && order.customerPhone.trim()) {
+      return phonesMatch(order.customerPhone, customerPhone);
+    }
+    // If the order has NO phone, only match if the customerId matches this user's phone customerId AND order is in myOrderIds
+    const expectedCid = customerId || ('usr_' + normalizePhoneDigits(customerPhone));
+    if (order.customerId && order.customerId === expectedCid && myOrderIds && myOrderIds.includes(order.id)) {
+      return true;
+    }
+    return false;
+  }
+
+  // 2. If NOT logged in with a phone (guest mode):
+  // Any order with a registered customerPhone MUST NEVER be shown to a guest!
+  if (order.customerPhone && order.customerPhone.trim()) {
+    return false;
+  }
+
+  // Anonymous guest order matching
+  if (customerId && order.customerId && order.customerId === customerId) return true;
+  if (myOrderIds && myOrderIds.includes(order.id)) return true;
+
+  return false;
+}
 
 export interface AppContextType {
   lang: Language;
@@ -14,8 +61,23 @@ export interface AppContextType {
   menuItems: MenuItem[];
   orders: Order[];
   cart: CartItem[];
-  activeTab: 'customer' | 'kitchen';
+  activeTab: 'customer' | 'kitchen' | 'admin';
   userRole: UserRole;
+  isAdmin: boolean;
+  adminPhone: string;
+  inquiries: KitchenInquiry[];
+  approvedKitchenPhones: string[];
+  approveInquiry: (id: string) => void;
+  rejectInquiry: (id: string) => void;
+  approveAllInquiries: () => void;
+  deleteInquiry: (id: string) => void;
+  enterAdminMode: () => void;
+  lockAdmin: () => void;
+  venues: Venue[];
+  addVenue: (venue: Omit<Venue, 'id'>) => Venue;
+  updateVenue: (id: string, updates: Partial<Venue>) => void;
+  deleteVenue: (id: string) => void;
+  toggleVenueActive: (id: string) => void;
   customerId: string;
   customerPhone: string;
   linkCustomerPhone: (phone: string) => void;
@@ -30,8 +92,17 @@ export interface AppContextType {
   lastScannedOrder: Order | null;
   soundEnabled: boolean;
   toggleSound: () => void;
+  venueName: string;
+  setVenueName: (name: string) => void;
+  selectedVenueId: string;
+  setSelectedVenueId: (id: string) => void;
+  activeVenue: Venue | undefined;
+  allMenuItems: MenuItem[];
+  addMenuItem: (item: Omit<MenuItem, 'id'>, targetVenueId?: string) => MenuItem;
+  deleteMenuItem: (itemId: string) => void;
+  toggleMenuItemAvailability: (itemId: string) => void;
   
-  setActiveTab: (tab: 'customer' | 'kitchen') => void;
+  setActiveTab: (tab: 'customer' | 'kitchen' | 'admin') => void;
   setUserRole: (role: UserRole) => void;
   unlockKitchenWithPin: (pin: string) => boolean;
   lockKitchen: () => void;
@@ -132,18 +203,193 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : INITIAL_STATIONS;
   });
 
-  const isLegacyMockOrder = (o: Order) => {
-    const name = o.customerName?.toLowerCase() || '';
-    if (name.includes('елена') || name.includes('elena') || name.includes('асель') || name.includes('данияр')) {
-      return true;
+  const DEFAULT_VENUES: Venue[] = [
+    {
+      id: 'venue_main',
+      name: 'Университетская столовая',
+      location: 'Главный корпус, 1 этаж',
+      phone: '+7 (778) 508 86 63',
+      isActive: true,
+      isPrimary: true,
+      prepTime: '5-8 мин',
+      openingHours: '08:30 - 18:00'
     }
-    if ((o.id === 'ord_181' || o.id === 'ord_182' || o.id === 'ord_183') && (!o.createdAt || o.createdAt < 1700000000000)) {
-      return true;
-    }
-    return false;
+  ];
+
+  const [venues, setVenues] = useState<Venue[]>(() => {
+    try {
+      const resetFlag = localStorage.getItem('foodmaxxing_venues_reset_v2');
+      if (!resetFlag) {
+        localStorage.setItem('foodmaxxing_venues_reset_v2', 'true');
+        localStorage.setItem('foodmaxxing_venues', JSON.stringify(DEFAULT_VENUES));
+        localStorage.setItem('express_selected_venue_id', 'venue_main');
+        localStorage.setItem('express_venue_name', 'Университетская столовая');
+        return DEFAULT_VENUES;
+      }
+      const saved = localStorage.getItem('foodmaxxing_venues');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    localStorage.setItem('foodmaxxing_venues', JSON.stringify(DEFAULT_VENUES));
+    return DEFAULT_VENUES;
+  });
+
+  const [venueName, setVenueNameState] = useState<string>(() => {
+    return localStorage.getItem('express_venue_name') || 'Университетская столовая';
+  });
+
+  const [selectedVenueId, setSelectedVenueIdState] = useState<string>(() => {
+    return localStorage.getItem('express_selected_venue_id') || 'venue_main';
+  });
+
+  const setVenueName = (name: string) => {
+    setVenueNameState(name);
+    localStorage.setItem('express_venue_name', name);
   };
 
-  const [menuItems] = useState<MenuItem[]>(MENU_ITEMS);
+  const setSelectedVenueId = (id: string) => {
+    setSelectedVenueIdState(id);
+    localStorage.setItem('express_selected_venue_id', id);
+  };
+
+  const activeVenue = useMemo(() => {
+    return (
+      venues.find(v => (selectedVenueId && v.id === selectedVenueId) || (venueName && v.name.toLowerCase() === venueName.toLowerCase())) ||
+      venues.find(v => v.isPrimary) ||
+      venues[0]
+    );
+  }, [venues, selectedVenueId, venueName]);
+
+  const addVenue = (v: Omit<Venue, 'id'>): Venue => {
+    const newVenue: Venue = {
+      ...v,
+      id: `venue_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+    };
+    setVenues(prev => {
+      const updated = [...prev, newVenue];
+      try {
+        localStorage.setItem('foodmaxxing_venues', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    return newVenue;
+  };
+
+  const updateVenue = (id: string, updates: Partial<Venue>) => {
+    setVenues(prev => {
+      const updated = prev.map(v => (v.id === id ? { ...v, ...updates } : v));
+      try {
+        localStorage.setItem('foodmaxxing_venues', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const toggleVenueActive = (id: string) => {
+    setVenues(prev => {
+      const updated = prev.map(v => (v.id === id ? { ...v, isActive: !v.isActive } : v));
+      try {
+        localStorage.setItem('foodmaxxing_venues', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const [allMenuItems, setAllMenuItems] = useState<MenuItem[]>(() => {
+    const saved = localStorage.getItem('express_menu_items');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item: any) => ({
+            ...item,
+            venueId: item.venueId || 'venue_main',
+            venueName: item.venueName || 'Университетская столовая'
+          }));
+        }
+      } catch {}
+    }
+    const defaults = MENU_ITEMS.map(item => ({
+      ...item,
+      venueId: 'venue_main',
+      venueName: 'Университетская столовая'
+    }));
+    try {
+      localStorage.setItem('express_menu_items', JSON.stringify(defaults));
+    } catch {}
+    return defaults;
+  });
+
+  // Filtered menu items for the current active venue (newly created venues are strictly empty!)
+  const menuItems = useMemo(() => {
+    if (!activeVenue) return [];
+    if (activeVenue.id === 'venue_main' || activeVenue.isPrimary) {
+      return allMenuItems.filter(item => 
+        !item.venueId || item.venueId === 'venue_main' || item.venueId === activeVenue.id
+      );
+    }
+    return allMenuItems.filter(item => 
+      (item.venueId && item.venueId === activeVenue.id) ||
+      (item.venueName && item.venueName.toLowerCase() === activeVenue.name.toLowerCase())
+    );
+  }, [allMenuItems, activeVenue]);
+
+  const addMenuItem = (item: Omit<MenuItem, 'id'>, targetVenueId?: string): MenuItem => {
+    const targetV = venues.find(v => targetVenueId ? v.id === targetVenueId : ((selectedVenueId && v.id === selectedVenueId) || (venueName && v.name.toLowerCase() === venueName.toLowerCase()))) || activeVenue || venues[0];
+    const newItem: MenuItem = {
+      ...item,
+      id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      venueId: targetV ? targetV.id : 'venue_main',
+      venueName: targetV ? targetV.name : 'Университетская столовая'
+    };
+    setAllMenuItems(prev => {
+      const updated = [newItem, ...prev];
+      try {
+        localStorage.setItem('express_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    return newItem;
+  };
+
+  const deleteMenuItem = (itemId: string) => {
+    setAllMenuItems(prev => {
+      const updated = prev.filter(m => m.id !== itemId);
+      try {
+        localStorage.setItem('express_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const toggleMenuItemAvailability = (itemId: string) => {
+    setAllMenuItems(prev => {
+      const updated = prev.map(m => (m.id === itemId ? { ...m, isAvailable: !m.isAvailable } : m));
+      try {
+        localStorage.setItem('express_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const deleteVenue = (id: string) => {
+    setVenues(prev => {
+      const updated = prev.filter(v => v.id !== id);
+      try {
+        localStorage.setItem('foodmaxxing_venues', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    setAllMenuItems(prev => {
+      const updated = prev.filter(m => m.venueId !== id);
+      try {
+        localStorage.setItem('express_menu_items', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('express_orders');
     if (!saved) return [];
@@ -167,39 +413,268 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved || 'customer';
   });
 
-  const [customerId] = useState<string>(() => {
-    let id = localStorage.getItem('express_customer_id');
-    if (!id) {
-      id = 'usr_' + Math.random().toString(36).substring(2, 9);
-      localStorage.setItem('express_customer_id', id);
-    }
-    return id;
-  });
-
-  const [activeTab, setActiveTab] = useState<'customer' | 'kitchen'>('customer');
-  // Default step: directly to venue selection
-  const [customerStep, setCustomerStep] = useState<'venue' | 'menu' | 'slot' | 'confirm' | 'tracking' | 'ready' | 'history'>('venue');
-  const [activeOrderId, setActiveOrderId] = useState<string | null>(() => {
-    return localStorage.getItem('express_active_order_id') || null;
-  });
-
-  // Only orders placed from this client account
-  const [myOrderIds, setMyOrderIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('express_my_order_ids');
-    return saved ? JSON.parse(saved) : [];
-  });
-
   const [customerPhone, setCustomerPhone] = useState<string>(() => {
     return localStorage.getItem('express_customer_phone') || '';
+  });
+
+  const [customerId, setCustomerIdState] = useState<string>(() => {
+    const savedPhone = localStorage.getItem('express_customer_phone') || '';
+    if (savedPhone) {
+      const phoneDigits = normalizePhoneDigits(savedPhone);
+      if (phoneDigits) return 'usr_' + phoneDigits;
+    }
+    let guestId = localStorage.getItem('express_guest_id');
+    if (!guestId) {
+      guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem('express_guest_id', guestId);
+    }
+    return guestId;
+  });
+
+  const [activeTab, setActiveTab] = useState<'customer' | 'kitchen' | 'admin'>('customer');
+  // Default step: directly to venue selection
+  const [customerStep, setCustomerStep] = useState<'venue' | 'menu' | 'slot' | 'confirm' | 'tracking' | 'ready' | 'history'>('venue');
+
+  const isAdmin = userRole === 'admin';
+  const adminPhone = ADMIN_PHONE;
+
+
+
+  const [inquiries, setInquiries] = useState<KitchenInquiry[]>(() => {
+    try {
+      const saved = localStorage.getItem('foodmaxxing_kitchen_inquiries');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((i: any) => ({
+            ...i,
+            status: i.status || 'pending'
+          }));
+        }
+      }
+    } catch {}
+    const defaults: KitchenInquiry[] = [
+      {
+        id: 'reg_dostyk_101',
+        kitchenName: 'Столовая «Достык» (КазНУ)',
+        locationName: 'Главный корпус, 1 этаж (пр. Аль-Фараби 71)',
+        contactName: 'Ерлан Сагитов',
+        phone: '+7(777)456 78 90',
+        aiVerified: true,
+        binIin: '040540012390',
+        okedCode: '56.29',
+        status: 'pending',
+        createdAt: new Date(Date.now() - 3600000 * 2).toISOString()
+      },
+      {
+        id: 'reg_bakery_102',
+        kitchenName: 'Пекарня & Кофейня «BakeMaxx»',
+        locationName: 'Блок В, 2 этаж (ул. Сатпаева 22)',
+        contactName: 'Данияр Каримов',
+        phone: '+7(702)234 56 78',
+        aiVerified: true,
+        binIin: '150240034567',
+        okedCode: '56.10',
+        status: 'pending',
+        createdAt: new Date(Date.now() - 3600000 * 5).toISOString()
+      },
+      {
+        id: 'reg_gourmet_103',
+        kitchenName: 'Студенческое кафе «Dostyk Gourmet»',
+        locationName: 'Кампус Математики, 1 этаж',
+        contactName: 'Асель Мукашева',
+        phone: '+7(775)890 12 34',
+        aiVerified: true,
+        binIin: '980140023411',
+        okedCode: '56.10',
+        status: 'pending',
+        createdAt: new Date(Date.now() - 3600000 * 12).toISOString()
+      }
+    ];
+    try {
+      localStorage.setItem('foodmaxxing_kitchen_inquiries', JSON.stringify(defaults));
+    } catch {}
+    return defaults;
+  });
+
+  const [approvedKitchenPhones, setApprovedKitchenPhones] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('foodmaxxing_approved_kitchen_phones');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ['7785088663', '7083210182'];
+  });
+
+  const approveInquiry = (inquiryId: string) => {
+    setInquiries(prev => {
+      const target = prev.find(i => i.id === inquiryId);
+      const updated = prev.map(i => i.id === inquiryId ? { ...i, status: 'approved' as const } : i);
+      try {
+        localStorage.setItem('foodmaxxing_kitchen_inquiries', JSON.stringify(updated));
+      } catch {}
+
+      if (target) {
+        setVenues(prevVenues => {
+          const exists = prevVenues.some(v => v.id === target.id || v.name.toLowerCase() === target.kitchenName.toLowerCase());
+          if (!exists) {
+            const newVenue: Venue = {
+              id: target.id,
+              name: target.kitchenName,
+              location: target.locationName || 'Главный корпус',
+              phone: target.phone,
+              isActive: true,
+              isPrimary: false,
+              prepTime: '10-12 мин'
+            };
+            const nextV = [...prevVenues, newVenue];
+            try {
+              localStorage.setItem('foodmaxxing_venues', JSON.stringify(nextV));
+            } catch {}
+            return nextV;
+          }
+          const nextV = prevVenues.map(v => (v.id === target.id || v.name.toLowerCase() === target.kitchenName.toLowerCase()) ? { ...v, isActive: true } : v);
+          try {
+            localStorage.setItem('foodmaxxing_venues', JSON.stringify(nextV));
+          } catch {}
+          return nextV;
+        });
+      }
+
+      if (target && target.phone) {
+        const norm = normalizePhoneDigits(target.phone);
+        if (norm) {
+          setApprovedKitchenPhones(phones => {
+            const next = Array.from(new Set([...phones, norm]));
+            try {
+              localStorage.setItem('foodmaxxing_approved_kitchen_phones', JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+        }
+      }
+      return updated;
+    });
+  };
+
+  const rejectInquiry = (inquiryId: string) => {
+    setInquiries(prev => {
+      const updated = prev.map(i => i.id === inquiryId ? { ...i, status: 'rejected' as const } : i);
+      try {
+        localStorage.setItem('foodmaxxing_kitchen_inquiries', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const approveAllInquiries = () => {
+    setInquiries(prev => {
+      const updated = prev.map(i => ({ ...i, status: 'approved' as const }));
+      try {
+        localStorage.setItem('foodmaxxing_kitchen_inquiries', JSON.stringify(updated));
+      } catch {}
+
+      setVenues(prevVenues => {
+        let nextV = [...prevVenues];
+        for (const item of prev) {
+          const exists = nextV.some(v => v.id === item.id || v.name.toLowerCase() === item.kitchenName.toLowerCase());
+          if (!exists) {
+            nextV.push({
+              id: item.id,
+              name: item.kitchenName,
+              location: item.locationName || 'Главный корпус',
+              phone: item.phone,
+              isActive: true,
+              isPrimary: false,
+              prepTime: '10-12 мин'
+            });
+          } else {
+            nextV = nextV.map(v => (v.id === item.id || v.name.toLowerCase() === item.kitchenName.toLowerCase()) ? { ...v, isActive: true } : v);
+          }
+        }
+        try {
+          localStorage.setItem('foodmaxxing_venues', JSON.stringify(nextV));
+        } catch {}
+        return nextV;
+      });
+
+      const newPhones = prev.map(i => normalizePhoneDigits(i.phone)).filter(Boolean);
+      setApprovedKitchenPhones(phones => {
+        const next = Array.from(new Set([...phones, ...newPhones]));
+        try {
+          localStorage.setItem('foodmaxxing_approved_kitchen_phones', JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+      return updated;
+    });
+  };
+
+  const deleteInquiry = (inquiryId: string) => {
+    setInquiries(prev => {
+      const updated = prev.filter(i => i.id !== inquiryId);
+      try {
+        localStorage.setItem('foodmaxxing_kitchen_inquiries', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  const enterAdminMode = () => {
+    setCustomerPhone('+7(708)321 01 82');
+    localStorage.setItem('express_customer_phone', '+7(708)321 01 82');
+    setUserRole('admin');
+    localStorage.setItem('express_user_role', 'admin');
+    setActiveTab('admin');
+  };
+
+  const lockAdmin = () => {
+    setUserRole('customer');
+    localStorage.setItem('express_user_role', 'customer');
+    setCustomerPhone('');
+    localStorage.removeItem('express_customer_phone');
+    setActiveTab('customer');
+  };
+
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(() => {
+    const savedPhone = localStorage.getItem('express_customer_phone') || '';
+    if (savedPhone) {
+      const phoneKey = normalizePhoneDigits(savedPhone);
+      if (phoneKey) {
+        return localStorage.getItem(`express_active_order_${phoneKey}`) || null;
+      }
+    }
+    return null;
+  });
+
+  // Orders placed from this client account (scoped strictly per phone number)
+  const [myOrderIds, setMyOrderIds] = useState<string[]>(() => {
+    const savedPhone = localStorage.getItem('express_customer_phone') || '';
+    if (savedPhone) {
+      const phoneKey = normalizePhoneDigits(savedPhone);
+      if (phoneKey) {
+        const savedPhoneOrders = localStorage.getItem(`express_user_orders_${phoneKey}`);
+        if (savedPhoneOrders) {
+          try {
+            return JSON.parse(savedPhoneOrders);
+          } catch {}
+        }
+      }
+    }
+    return [];
   });
 
   const logoutCustomer = () => {
     setCustomerPhone('');
     localStorage.removeItem('express_customer_phone');
     localStorage.removeItem('express_active_order_id');
-    localStorage.removeItem('express_my_order_ids');
     setActiveOrderId(null);
     setMyOrderIds([]);
+    setUserRole('customer');
+    localStorage.setItem('express_user_role', 'customer');
+    setActiveTab('customer');
+    const guestId = 'guest_' + Math.random().toString(36).substring(2, 9);
+    setCustomerIdState(guestId);
+    localStorage.setItem('express_guest_id', guestId);
   };
 
   const linkCustomerPhone = (phone: string) => {
@@ -208,22 +683,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       logoutCustomer();
       return;
     }
+    const phoneKey = normalizePhoneDigits(cleanPhone);
+    const newCid = 'usr_' + phoneKey;
+
     setCustomerPhone(cleanPhone);
+    setCustomerIdState(newCid);
     localStorage.setItem('express_customer_phone', cleanPhone);
-    setOrders(prev => {
-      const matchingIds: string[] = [];
-      const updated = prev.map(o => {
-        if (o.customerPhone && o.customerPhone === cleanPhone) {
-          matchingIds.push(o.id);
-          return { ...o, customerId };
-        }
-        return o;
-      });
-      if (matchingIds.length > 0) {
-        setMyOrderIds(current => Array.from(new Set([...current, ...matchingIds])));
+    localStorage.setItem('express_customer_id', newCid);
+
+    // 1. Find orders in memory that belong to this phone number
+    const matchingFromState = orders
+      .filter(o => phonesMatch(o.customerPhone, cleanPhone))
+      .map(o => o.id);
+
+    // 2. Load orders previously saved for this phone in localStorage
+    let savedForPhone: string[] = [];
+    try {
+      const saved = localStorage.getItem(`express_user_orders_${phoneKey}`);
+      if (saved) savedForPhone = JSON.parse(saved);
+    } catch {}
+
+    const allPhoneOrderIds = Array.from(new Set([...savedForPhone, ...matchingFromState]));
+    setMyOrderIds(allPhoneOrderIds);
+    try {
+      localStorage.setItem(`express_user_orders_${phoneKey}`, JSON.stringify(allPhoneOrderIds));
+    } catch {}
+
+    // 3. Set or restore active order for this phone
+    const activeOrd = orders.find(
+      o => phonesMatch(o.customerPhone, cleanPhone) &&
+      (o.status === 'SCHEDULED' || o.status === 'COOKING' || o.status === 'READY')
+    );
+    if (activeOrd) {
+      setActiveOrderId(activeOrd.id);
+      try {
+        localStorage.setItem(`express_active_order_${phoneKey}`, activeOrd.id);
+      } catch {}
+    } else {
+      const savedActiveId = localStorage.getItem(`express_active_order_${phoneKey}`);
+      if (savedActiveId && allPhoneOrderIds.includes(savedActiveId)) {
+        setActiveOrderId(savedActiveId);
+      } else {
+        setActiveOrderId(null);
       }
-      return updated;
-    });
+    }
+
+    if (isAdminPhone(cleanPhone)) {
+      setUserRole('admin');
+      setActiveTab('admin');
+      localStorage.setItem('express_user_role', 'admin');
+    }
   };
 
   const unlockKitchenWithPin = (pin: string): boolean => {
@@ -245,9 +754,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCustomerStep('menu');
   };
 
+  // Sync active phone's order IDs
   useEffect(() => {
-    localStorage.setItem('express_my_order_ids', JSON.stringify(myOrderIds));
-  }, [myOrderIds]);
+    if (!customerPhone) return;
+    const phoneKey = normalizePhoneDigits(customerPhone);
+    if (!phoneKey) return;
+    try {
+      localStorage.setItem(`express_user_orders_${phoneKey}`, JSON.stringify(myOrderIds));
+    } catch {}
+  }, [myOrderIds, customerPhone]);
+
+  // Sync active phone's active order
+  useEffect(() => {
+    if (!customerPhone) return;
+    const phoneKey = normalizePhoneDigits(customerPhone);
+    if (!phoneKey) return;
+    try {
+      if (activeOrderId) {
+        localStorage.setItem(`express_active_order_${phoneKey}`, activeOrderId);
+      } else {
+        localStorage.removeItem(`express_active_order_${phoneKey}`);
+      }
+    } catch {}
+  }, [activeOrderId, customerPhone]);
+
+  // Reactive synchronization: continuously link orders matching the user's phone
+  useEffect(() => {
+    if (!customerPhone) {
+      setMyOrderIds([]);
+      return;
+    }
+    const phoneKey = normalizePhoneDigits(customerPhone);
+    if (!phoneKey) return;
+
+    const matchingIds = orders
+      .filter(o => isUserOrder(o, customerPhone, customerId, myOrderIds))
+      .map(o => o.id);
+
+    setMyOrderIds(prev => {
+      const next = Array.from(new Set([...prev, ...matchingIds]));
+      if (next.length !== prev.length) {
+        try {
+          localStorage.setItem(`express_user_orders_${phoneKey}`, JSON.stringify(next));
+        } catch {}
+        return next;
+      }
+      return prev;
+    });
+  }, [orders, customerPhone, customerId]);
 
   // Real-time ticking clock
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
@@ -333,6 +887,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } catch {
             // ignore
           }
+
+          const phone = localStorage.getItem('express_customer_phone') || '';
+          if (phone) {
+            const phoneKey = normalizePhoneDigits(phone);
+            const matching = loadedOrders
+              .filter((o: Order) => phonesMatch(o.customerPhone, phone))
+              .map((o: Order) => o.id);
+            if (matching.length > 0 && phoneKey) {
+              setMyOrderIds(prev => {
+                const next = Array.from(new Set([...prev, ...matching]));
+                try {
+                  localStorage.setItem(`express_user_orders_${phoneKey}`, JSON.stringify(next));
+                } catch {}
+                return next;
+              });
+            }
+          }
         }
       });
 
@@ -350,6 +921,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               playNewOrderSound();
               return [newOrder, ...prev];
             });
+
+            const phone = localStorage.getItem('express_customer_phone') || '';
+            if (phone && phonesMatch(newOrder.customerPhone, phone)) {
+              const phoneKey = normalizePhoneDigits(phone);
+              if (phoneKey) {
+                setMyOrderIds(prev => {
+                  const next = Array.from(new Set([newOrder.id, ...prev]));
+                  try {
+                    localStorage.setItem(`express_user_orders_${phoneKey}`, JSON.stringify(next));
+                  } catch {}
+                  return next;
+                });
+              }
+            }
           } else if (payload.eventType === 'UPDATE') {
             const updated = mapDbToOrder(payload.new);
             setOrders(prev => {
@@ -457,7 +1042,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createOrder = ({
     customerName,
-    customerPhone,
+    customerPhone: orderCustomerPhone,
     pickupTime
   }: {
     customerName: string;
@@ -487,12 +1072,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       station: ci.menuItem.station
     }));
 
+    const effectivePhone = orderCustomerPhone?.trim() || customerPhone.trim();
+    const phoneKey = effectivePhone ? normalizePhoneDigits(effectivePhone) : '';
+    const effectiveCid = phoneKey ? ('usr_' + phoneKey) : customerId;
+
     const newOrder: Order = {
       id,
       orderNumber: orderNum,
-      customerId,
+      customerId: effectiveCid,
       customerName: customerName.trim() || (lang === 'kz' ? 'Әлихан' : lang === 'en' ? 'Alex' : 'Алихан'),
-      customerPhone: customerPhone?.trim(),
+      customerPhone: effectivePhone || undefined,
+      venueId: activeVenue?.id || 'venue_main',
+      venueName: activeVenue?.name || venueName || 'Университетская столовая',
       items,
       totalAmount: total,
       requestedPickupTime: pickupTime,
@@ -502,10 +1093,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       delayMinutes: 0,
       createdAt: Date.now()
     };
-
-    if (customerPhone?.trim()) {
-      linkCustomerPhone(customerPhone.trim());
-    }
 
     setOrders(prev => {
       const updated = [newOrder, ...prev];
@@ -517,19 +1104,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
+    if (effectivePhone) {
+      linkCustomerPhone(effectivePhone);
+    }
+
+    setActiveOrderId(newOrder.id);
+    if (phoneKey) {
+      try {
+        localStorage.setItem(`express_active_order_${phoneKey}`, newOrder.id);
+        const saved = localStorage.getItem(`express_user_orders_${phoneKey}`);
+        const existing: string[] = saved ? JSON.parse(saved) : [];
+        const updatedIds = Array.from(new Set([newOrder.id, ...existing]));
+        localStorage.setItem(`express_user_orders_${phoneKey}`, JSON.stringify(updatedIds));
+        setMyOrderIds(updatedIds);
+      } catch {}
+    }
+
     if (supabase && isSupabaseConfigured) {
       const dbPayload = mapOrderToDb(newOrder);
       supabase.from('orders').insert(dbPayload).then(({ error }: { error: any }) => {
         if (error) console.error('Supabase createOrder error:', error.message);
       });
-    }
-
-    setActiveOrderId(newOrder.id);
-    setMyOrderIds(prev => [newOrder.id, ...prev.filter(myId => myId !== newOrder.id)]);
-    try {
-      localStorage.setItem('express_active_order_id', newOrder.id);
-    } catch {
-      // ignore
     }
 
     clearCart();
@@ -736,6 +1331,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         cart,
         activeTab,
         userRole,
+        isAdmin,
+        adminPhone,
+        inquiries,
+        approvedKitchenPhones,
+        approveInquiry,
+        rejectInquiry,
+        approveAllInquiries,
+        deleteInquiry,
+        enterAdminMode,
+        lockAdmin,
+        venues,
+        addVenue,
+        updateVenue,
+        deleteVenue,
+        toggleVenueActive,
         customerId,
         customerPhone,
         linkCustomerPhone,
@@ -771,7 +1381,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetDemoData,
         getItemName,
         getItemDesc,
-        getStationName
+        getStationName,
+        venueName,
+        setVenueName,
+        selectedVenueId,
+        setSelectedVenueId,
+        activeVenue,
+        allMenuItems,
+        addMenuItem,
+        deleteMenuItem,
+        toggleMenuItemAvailability
       }}
     >
       {children}

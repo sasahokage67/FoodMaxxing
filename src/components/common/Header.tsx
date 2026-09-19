@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
-import { ChefHat, Smartphone, RotateCcw, Volume2, VolumeX, Receipt, KeyRound, LogOut, X, Lock } from 'lucide-react';
+import { useApp, isUserOrder } from '../../context/AppContext';
+import { ChefHat, Smartphone, Volume2, VolumeX, Receipt, LogOut } from 'lucide-react';
 import { Language } from '../../i18n/translations';
 import { PhoneAuthModal } from './PhoneAuthModal';
 
@@ -19,15 +19,16 @@ export const Header: React.FC = () => {
     setCustomerStep,
     myOrderIds,
     customerPhone,
+    customerId,
     userRole,
+    isAdmin,
+    inquiries,
+    lockAdmin,
     unlockKitchenWithPin,
     lockKitchen
   } = useApp();
 
-  const [showPinModal, setShowPinModal] = useState(false);
   const [showPhoneAuthModal, setShowPhoneAuthModal] = useState(false);
-  const [pinValue, setPinValue] = useState('');
-  const [pinError, setPinError] = useState(false);
 
   // Auto-detect URL parameter ?role=kitchen or ?pin=2026
   useEffect(() => {
@@ -41,27 +42,16 @@ export const Header: React.FC = () => {
     }
   }, []);
 
-  const handleUnlockPin = (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const ok = unlockKitchenWithPin(pinValue);
-    if (ok) {
-      setShowPinModal(false);
-      setPinValue('');
-      setPinError(false);
-    } else {
-      setPinError(true);
-    }
-  };
-
   const activeKitchenCount = orders.filter(o => o.status === 'SCHEDULED' || o.status === 'COOKING').length;
   const readyCount = orders.filter(o => o.status === 'READY').length;
+  const userOrdersCount = orders.filter(o => isUserOrder(o, customerPhone, customerId, myOrderIds)).length;
 
   return (
     <>
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 px-4 py-2.5 shadow-xs">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto relative flex flex-col md:flex-row items-center justify-between gap-3 min-h-[44px]">
           {/* Brand & Language Switcher */}
-          <div className="flex items-center justify-between w-full md:w-auto">
+          <div className="flex items-center justify-start space-x-2.5 w-full md:w-auto">
             <div
               className="flex items-center space-x-2.5 cursor-pointer"
               onClick={() => {
@@ -80,7 +70,7 @@ export const Header: React.FC = () => {
             </div>
 
             {/* Tri-Lingual Switcher */}
-            <div className="flex items-center space-x-2 ml-4 md:ml-8">
+            <div className="flex items-center">
               {/* Lang switcher */}
               <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-[11px] font-bold">
                 {(['kz', 'ru', 'en'] as Language[]).map(l => (
@@ -100,8 +90,8 @@ export const Header: React.FC = () => {
             </div>
           </div>
 
-          {/* View Switcher Tabs (Role Gated) */}
-          <nav className="flex items-center space-x-1.5 bg-gray-100 p-1 rounded-xl w-full md:w-auto justify-center">
+          {/* View Switcher Tabs (Role Gated) - Centered */}
+          <nav className="flex items-center space-x-1.5 bg-gray-100 p-1 rounded-xl w-full md:w-auto justify-center md:absolute md:left-1/2 md:-translate-x-1/2 md:top-1/2 md:-translate-y-1/2 shadow-xs">
             <button
               onClick={() => {
                 setActiveTab('customer');
@@ -130,9 +120,9 @@ export const Header: React.FC = () => {
             >
               <Receipt className="w-3.5 h-3.5" />
               <span>{t.myOrders}</span>
-              {myOrderIds.length > 0 && (
+              {userOrdersCount > 0 && (
                 <span className="ml-0.5 px-1.5 py-0.2 text-[10px] bg-orange-600 text-white rounded-full font-bold">
-                  {myOrderIds.length}
+                  {userOrdersCount}
                 </span>
               )}
             </button>
@@ -177,22 +167,32 @@ export const Header: React.FC = () => {
                 )}
               </button>
             )}
+
+            {/* Admin Dashboard tab */}
+            {(isAdmin || userRole === 'admin') && (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all relative ${
+                  activeTab === 'admin'
+                    ? 'bg-orange-600 text-white shadow-xs font-bold'
+                    : 'text-orange-700 bg-orange-50 hover:bg-orange-100'
+                }`}
+              >
+                <span>{lang === 'kz' ? 'Әкімші' : lang === 'en' ? 'Admin' : 'Админ-панель'}</span>
+                {inquiries.filter(i => !i.status || i.status === 'pending').length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.2 text-[10px] bg-red-600 text-white rounded-full font-bold">
+                    {inquiries.filter(i => !i.status || i.status === 'pending').length}
+                  </span>
+                )}
+              </button>
+            )}
           </nav>
 
           {/* Desktop Tools: Sound Toggle, Staff Access / Exit, Reset Demo */}
           <div className="hidden md:flex items-center space-x-2.5">
 
-            {/* Staff Access / Role Switcher */}
-            {userRole === 'customer' ? (
-              <button
-                onClick={() => setShowPinModal(true)}
-                className="flex items-center space-x-1.5 text-xs text-gray-500 hover:text-orange-700 bg-gray-50 hover:bg-orange-50 border border-gray-200 hover:border-orange-200 px-2.5 py-1.5 rounded-lg transition-all"
-                title={t.staffAccess}
-              >
-                <KeyRound className="w-3.5 h-3.5" />
-                <span>{t.staffAccess}</span>
-              </button>
-            ) : (
+            {/* Kitchen Exit Button */}
+            {userRole === 'kitchen' && (
               <button
                 onClick={lockKitchen}
                 className="flex items-center space-x-1.5 text-xs font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1.5 rounded-lg transition-all"
@@ -202,92 +202,9 @@ export const Header: React.FC = () => {
                 <span>{t.exitKitchen}</span>
               </button>
             )}
-
-            {/* Reset Demo */}
-            <button
-              onClick={resetDemoData}
-              className="flex items-center space-x-1 text-xs text-gray-400 hover:text-gray-700 p-1.5 rounded hover:bg-gray-100 transition-colors"
-              title={t.resetDemo}
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
       </header>
-
-      {/* Staff Access PIN Modal */}
-      {showPinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl p-6 max-w-xs w-full shadow-2xl border border-gray-200 text-center relative space-y-4">
-            <button
-              onClick={() => {
-                setShowPinModal(false);
-                setPinError(false);
-                setPinValue('');
-              }}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-700 p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
-
-            <div className="w-12 h-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center mx-auto">
-              <Lock className="w-6 h-6" />
-            </div>
-
-            <div>
-              <h3 className="font-black text-base text-gray-900">{t.staffAccess}</h3>
-              <p className="text-xs text-gray-500 mt-1">{t.enterPin}</p>
-            </div>
-
-            <form onSubmit={handleUnlockPin} className="space-y-3">
-              <div>
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder={t.pinPlaceholder}
-                  value={pinValue}
-                  onChange={e => {
-                    setPinValue(e.target.value);
-                    setPinError(false);
-                  }}
-                  autoFocus
-                  className={`w-full text-center tracking-widest font-mono text-xl py-2.5 px-4 rounded-xl border-2 outline-none transition-all ${
-                    pinError
-                      ? 'border-red-500 bg-red-50 text-red-900'
-                      : 'border-gray-300 focus:border-orange-600 focus:ring-2 focus:ring-orange-100'
-                  }`}
-                />
-                {pinError && (
-                  <p className="text-[11px] text-red-600 font-semibold mt-1">
-                    {t.wrongPin}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setShowPinModal(false)}
-                  className="flex-1 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-md transition-all"
-                >
-                  {t.unlockKitchen}
-                </button>
-              </div>
-
-              <div className="text-[10px] text-gray-400 font-mono">
-                Тестовый PIN: <strong>2026</strong>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       <PhoneAuthModal isOpen={showPhoneAuthModal} onClose={() => setShowPhoneAuthModal(false)} />
     </>

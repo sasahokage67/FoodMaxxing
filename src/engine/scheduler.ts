@@ -77,7 +77,7 @@ export function calculateAvailableSlots(
     let loadDesc = '';
     let canAccept = true;
 
-    if (ordersInSlot >= 3) {
+    if (ordersInSlot >= 25) {
       status = 'FULL';
       canAccept = false;
       label = lang === 'kz' ? 'Толған' : lang === 'en' ? 'Full' : 'Занято';
@@ -86,7 +86,7 @@ export function calculateAvailableSlots(
         : lang === 'en'
         ? 'Slot full · Please select adjacent time'
         : 'Слот заполнен · Выберите соседнее время';
-    } else if (ordersInSlot >= 2) {
+    } else if (ordersInSlot >= 15) {
       status = 'TIGHT';
       canAccept = true;
       label = lang === 'kz' ? 'Қарбалас' : lang === 'en' ? 'Peak' : 'Пик';

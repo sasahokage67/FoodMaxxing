@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, isUserOrder } from '../../context/AppContext';
 import { ArrowLeft, AlertTriangle, QrCode, Clock, Sparkles, Receipt, MessageSquare, ShoppingBag } from 'lucide-react';
 import { timeStringToMinutes } from '../../engine/scheduler';
 import { ReceiptCardModal } from './ReceiptCardModal';
@@ -14,31 +14,21 @@ export const OrderConfirmation: React.FC = () => {
     cancelOrder,
     currentDate,
     t,
-    lang
+    lang,
+    customerPhone,
+    customerId,
+    myOrderIds
   } = useApp();
 
   const [showReceipt, setShowReceipt] = useState(false);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
 
-  const currentActiveId = activeOrderId || localStorage.getItem('express_active_order_id');
-  let order = orders.find(o => o.id === currentActiveId);
+  const userOrders = orders.filter(o => isUserOrder(o, customerPhone, customerId, myOrderIds));
+  let order = userOrders.find(o => o.id === activeOrderId);
 
-  if (!order && orders.length > 0) {
-    order = orders[0];
-  }
-
-  if (!order) {
-    try {
-      const saved = localStorage.getItem('express_orders');
-      if (saved) {
-        const parsed: Order[] = JSON.parse(saved);
-        if (parsed.length > 0) {
-          order = parsed.find(o => o.id === currentActiveId) || parsed[0];
-        }
-      }
-    } catch {
-      // ignore
-    }
+  if (!order && userOrders.length > 0) {
+    const activeOne = userOrders.find(o => o.status === 'SCHEDULED' || o.status === 'COOKING' || o.status === 'READY');
+    order = activeOne || userOrders[0];
   }
 
   if (!order) {

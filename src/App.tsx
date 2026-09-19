@@ -8,6 +8,7 @@ import { OrderConfirmation } from './components/customer/OrderConfirmation';
 import { ReadyPasscard } from './components/customer/ReadyPasscard';
 import { MyOrdersList } from './components/customer/MyOrdersList';
 import { KitchenDashboard } from './components/kitchen/KitchenDashboard';
+import { AdminDashboard } from './components/admin/AdminDashboard';
 import { Footer } from './components/common/Footer';
 
 export const App: React.FC = () => {
@@ -30,6 +31,7 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === 'kitchen' && <KitchenDashboard />}
+        {activeTab === 'admin' && <AdminDashboard />}
       </main>
 
       <Footer />

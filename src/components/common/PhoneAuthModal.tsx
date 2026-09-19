@@ -1,22 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Smartphone, X, CheckCircle2, ShieldCheck, ArrowRight, RotateCcw, KeyRound, Check } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { formatPhoneNumber, isPhoneValid, isAdminPhone } from '../../utils/phoneFormatter';
+import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 
 export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
-  const { lang, customerPhone, linkCustomerPhone, logoutCustomer, myOrderIds, setCustomerStep } = useApp();
+  const { lang, customerPhone, linkCustomerPhone, logoutCustomer, myOrderIds, setCustomerStep, setActiveTab } = useApp();
 
-  const [phoneInput, setPhoneInput] = useState(customerPhone || '');
+  const [phoneInput, setPhoneInput] = useState(customerPhone ? formatPhoneNumber(customerPhone) : '+7(');
   const [step, setStep] = useState<'phone' | 'otp' | 'success'>('phone');
   const [otpCode, setOtpCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      setPhoneInput(customerPhone || '');
+      setPhoneInput(customerPhone ? formatPhoneNumber(customerPhone) : '+7(');
       setStep('phone');
       setOtpCode('');
       setErrorMsg('');
+      setPrivacyAccepted(false);
     }
   }, [isOpen, customerPhone]);
 
@@ -24,9 +29,12 @@ export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
 
   const handleSendCode = (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = phoneInput.replace(/\D/g, '');
-    if (clean.length < 10) {
-      setErrorMsg(lang === 'kz' ? 'Телефон нөмірін дұрыс енгізіңіз' : lang === 'en' ? 'Enter a valid phone number' : 'Введите корректный номер телефона');
+    if (!privacyAccepted) {
+      setErrorMsg(lang === 'kz' ? 'Құпиялылық саясатымен келісу қажет' : lang === 'en' ? 'You must accept the Privacy Policy' : 'Необходимо подтвердить согласие с Политикой конфиденциальности');
+      return;
+    }
+    if (!isPhoneValid(phoneInput)) {
+      setErrorMsg(lang === 'kz' ? 'Телефон нөмірін толық енгізіңіз (10 сан)' : lang === 'en' ? 'Enter a complete phone number (10 digits)' : 'Введите полный номер телефона: 10 цифр');
       return;
     }
 
@@ -121,17 +129,48 @@ export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
                     <input
                       type="tel"
                       required
+                      maxLength={16}
                       value={phoneInput}
-                      onChange={e => setPhoneInput(e.target.value)}
-                      placeholder="+7 (7XX) XXX-XX-XX"
+                      onChange={e => {
+                        setPhoneInput(formatPhoneNumber(e.target.value));
+                        if (errorMsg) setErrorMsg('');
+                      }}
+                      onFocus={() => { if (!phoneInput) setPhoneInput('+7('); }}
+                      onBlur={() => { if (phoneInput === '+7(' || phoneInput === '+7') setPhoneInput(''); }}
+                      placeholder="+7(7xx)xxx xx xx"
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 text-sm font-bold font-mono focus:outline-none focus:border-orange-500"
                     />
                     {errorMsg && <p className="text-xs text-red-600 font-semibold">{errorMsg}</p>}
                   </div>
 
+                  {/* Mandatory Privacy Policy Checkbox */}
+                  <label className="flex items-start space-x-2.5 text-xs text-gray-700 cursor-pointer select-none pt-1">
+                    <input
+                      type="checkbox"
+                      checked={privacyAccepted}
+                      onChange={e => {
+                        setPrivacyAccepted(e.target.checked);
+                        if (errorMsg) setErrorMsg('');
+                      }}
+                      className="mt-0.5 w-4 h-4 rounded text-orange-600 border-gray-300 focus:ring-orange-500 cursor-pointer flex-shrink-0"
+                      required
+                    />
+                    <span className="leading-snug text-[11px] text-gray-600">
+                      Я ознакомлен и принимаю{' '}
+                      <button
+                        type="button"
+                        onClick={() => setShowPrivacyModal(true)}
+                        className="text-orange-600 hover:text-orange-700 underline font-bold cursor-pointer inline"
+                      >
+                        Политику конфиденциальности
+                      </button>{' '}
+                      и даю согласие на обработку персональных данных.
+                    </span>
+                  </label>
+
                   <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-[11px] text-gray-600 space-y-1 leading-relaxed">
                     <div className="flex items-center space-x-1 font-bold text-gray-900">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
                       <span>Легкая авторизация без паролей</span>
                     </div>
                     <p>Мы отправим короткий SMS-код для подтверждения. Для теста можно ввести любой номер (код: <strong>2026</strong>).</p>
@@ -139,8 +178,8 @@ export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
 
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="w-full bg-orange-600 hover:bg-orange-700 active:scale-98 text-white font-bold py-3 rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 text-xs"
+                    disabled={loading || !privacyAccepted || !isPhoneValid(phoneInput)}
+                    className="w-full bg-orange-600 hover:bg-orange-700 active:scale-98 text-white font-bold py-3 rounded-xl transition-all shadow-md flex items-center justify-center space-x-2 text-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                   >
                     <span>{loading ? 'Отправка SMS...' : 'Получить код по SMS'}</span>
                     <ArrowRight className="w-4 h-4" />
@@ -211,17 +250,30 @@ export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
               </div>
 
               <div className="space-y-2 pt-1">
+                {isAdminPhone(phoneInput) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('admin');
+                      onClose();
+                    }}
+                    className="w-full bg-slate-900 hover:bg-black text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
+                    <ShieldCheck className="w-4 h-4 text-orange-400" />
+                    <span>Открыть панель администратора</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleGoToOrders}
-                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs"
+                  className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl text-xs transition-all shadow-xs cursor-pointer"
                 >
                   Перейти в Мои заказы
                 </button>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition-all"
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2.5 rounded-xl text-xs transition-all cursor-pointer"
                 >
                   Закрыть окно
                 </button>
@@ -230,6 +282,11 @@ export const PhoneAuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
           )}
         </div>
       </div>
+
+      <PrivacyPolicyModal
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
     </div>
   );
 };

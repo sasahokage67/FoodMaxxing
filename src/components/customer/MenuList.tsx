@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { FoodCategory } from '../../types';
-import { ArrowLeft, Plus, Minus, ShoppingBag, Receipt, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, ShoppingBag, Receipt, ChevronRight, UtensilsCrossed } from 'lucide-react';
 
 export const MenuList: React.FC = () => {
-  const { menuItems, cart, addToCart, updateCartQuantity, setCustomerStep, getItemName, getItemDesc, t, lang, myOrderIds } = useApp();
+  const { menuItems, cart, addToCart, updateCartQuantity, setCustomerStep, getItemName, getItemDesc, t, lang, myOrderIds, venueName } = useApp();
   const [activeCategoryKey, setActiveCategoryKey] = useState<string>('all');
   const [activeDietFilter, setActiveDietFilter] = useState<'all' | 'halal' | 'hit' | 'veg'>('all');
 
@@ -53,7 +53,7 @@ export const MenuList: React.FC = () => {
           <div>
             <div className="flex items-center space-x-2">
               <h1 className="text-xl font-black text-gray-900 leading-tight group-hover:text-orange-600 transition-colors">
-                {t.cafeteriaName}
+                {venueName || t.cafeteriaName}
               </h1>
               <span className="text-[11px] font-bold text-gray-500 bg-gray-100 group-hover:bg-orange-100 group-hover:text-orange-700 border border-gray-200 group-hover:border-orange-300 px-2 py-0.5 rounded-lg transition-colors flex items-center space-x-1">
                 <span>{lang === 'kz' ? 'Ауыстыру' : lang === 'en' ? 'Change' : 'Сменить'}</span>
@@ -150,109 +150,138 @@ export const MenuList: React.FC = () => {
             </button>
           </div>
 
-          {/* Broad Grid of Dishes (1 col mobile, 2 cols tablet, 3 cols desktop) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 pt-2">
-            {filteredItems.map(item => {
-              const qty = getItemQuantity(item.id);
-              const name = getItemName(item);
-              const desc = getItemDesc(item);
-
-              return (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs hover:shadow-md hover:border-orange-300 transition-all flex flex-col justify-between group"
+          {/* Broad Grid of Dishes or Empty Venue State */}
+          {filteredItems.length === 0 ? (
+            <div className="bg-white rounded-3xl p-10 sm:p-14 text-center border border-gray-200 shadow-2xs space-y-4">
+              <div className="w-16 h-16 rounded-2xl bg-orange-50 text-orange-500 flex items-center justify-center mx-auto border border-orange-200">
+                <UtensilsCrossed className="w-8 h-8" />
+              </div>
+              <div className="space-y-1.5">
+                <h3 className="font-black text-base sm:text-lg text-gray-900">
+                  {lang === 'kz' ? 'Бұл асханада әзірге тағамдар жоқ' : lang === 'en' ? 'No dishes in this cafeteria yet' : 'В этой столовой пока нет блюд'}
+                </h3>
+                <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto leading-relaxed">
+                  {lang === 'kz'
+                    ? 'Асхана қызметкерлері жаңа мәзірді толтыруда. Басқа асхананы таңдай аласыз.'
+                    : lang === 'en'
+                    ? 'Cafeteria staff is currently preparing their express menu. You can choose another venue.'
+                    : 'Новое заведение создано с пустым меню. Персонал кухни скоро добавит блюда, либо вы можете выбрать другую столовую.'}
+                </p>
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => setCustomerStep('venue')}
+                  className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 active:scale-95 text-white font-extrabold text-xs rounded-xl shadow-xs transition-all inline-flex items-center space-x-2 cursor-pointer"
                 >
-                  <div>
-                    {/* Food Photo with Overlay Badges */}
-                    <div className="relative w-full h-44 bg-gray-100 overflow-hidden">
-                      <img
-                        src={item.imageUrl}
-                        alt={name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                      {/* Top Badges */}
-                      <div className="absolute top-2.5 left-2.5 flex items-center space-x-1.5 flex-wrap gap-y-1">
-                        <span className="bg-black/75 backdrop-blur-xs text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs">
-                          {item.calories} {t.kcal}
-                        </span>
-                        {item.isHit && (
-                          <span className="bg-orange-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wide">
-                            {t.tagHit}
-                          </span>
-                        )}
-                      </div>
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>{lang === 'kz' ? 'Басқа асхананы таңдау' : lang === 'en' ? 'Select another venue' : 'Выбрать другую столовую'}</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 pt-2">
+              {filteredItems.map(item => {
+                const qty = getItemQuantity(item.id);
+                const name = getItemName(item);
+                const desc = getItemDesc(item);
 
-                      {/* Bottom Badges */}
-                      <div className="absolute bottom-2.5 left-2.5 flex items-center space-x-1.5">
-                        <span className="bg-black/75 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                          {item.prepMinutes} {t.minAbbr}
-                        </span>
-                        {item.isHalal && (
-                          <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                            {t.tagHalal}
-                          </span>
-                        )}
-                        {item.isVegetarian && (
-                          <span className="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
-                            {t.tagVeg}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-4 space-y-1.5">
-                      <h3 className="font-extrabold text-base text-gray-900 group-hover:text-orange-600 transition-colors leading-snug">
-                        {name}
-                      </h3>
-                      <p className="text-gray-500 text-xs line-clamp-2 leading-relaxed">
-                        {desc}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Footer: Price & Add / Quantity Stepper */}
-                  <div className="p-4 pt-1 flex items-center justify-between border-t border-gray-100">
+                return (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-2xs hover:shadow-md hover:border-orange-300 transition-all flex flex-col justify-between group"
+                  >
                     <div>
-                      <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Цена</div>
-                      <div className="text-base font-black text-gray-900 tabular-nums">
-                        {item.price.toLocaleString()} {t.priceKzt}
+                      {/* Food Photo with Overlay Badges */}
+                      <div className="relative w-full h-44 bg-gray-100 overflow-hidden">
+                        <img
+                          src={item.imageUrl}
+                          alt={name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                        {/* Top Badges */}
+                        <div className="absolute top-2.5 left-2.5 flex items-center space-x-1.5 flex-wrap gap-y-1">
+                          <span className="bg-black/75 backdrop-blur-xs text-amber-300 text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs">
+                            {item.calories} {t.kcal}
+                          </span>
+                          {item.isHit && (
+                            <span className="bg-orange-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow-xs uppercase tracking-wide">
+                              {t.tagHit}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Bottom Badges */}
+                        <div className="absolute bottom-2.5 left-2.5 flex items-center space-x-1.5">
+                          <span className="bg-black/75 backdrop-blur-xs text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                            {item.prepMinutes} {t.minAbbr}
+                          </span>
+                          {item.isHalal && (
+                            <span className="bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                              {t.tagHalal}
+                            </span>
+                          )}
+                          {item.isVegetarian && (
+                            <span className="bg-green-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-md">
+                              {t.tagVeg}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content */}
+                      <div className="p-4 space-y-1.5">
+                        <h3 className="font-extrabold text-base text-gray-900 group-hover:text-orange-600 transition-colors leading-snug">
+                          {name}
+                        </h3>
+                        <p className="text-gray-500 text-xs line-clamp-2 leading-relaxed">
+                          {desc}
+                        </p>
                       </div>
                     </div>
 
-                    {qty === 0 ? (
-                      <button
-                        onClick={() => addToCart(item)}
-                        className="flex items-center space-x-1.5 bg-orange-50 hover:bg-orange-600 hover:text-white active:scale-95 text-orange-700 border border-orange-200 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>{t.addToCart}</span>
-                      </button>
-                    ) : (
-                      <div className="flex items-center space-x-2 bg-gray-100 p-1 rounded-xl border border-gray-200">
-                        <button
-                          onClick={() => updateCartQuantity(item.id, -1)}
-                          className="w-7 h-7 rounded-lg bg-white text-gray-700 flex items-center justify-center font-bold hover:bg-gray-200 text-xs shadow-2xs transition-all cursor-pointer"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-xs font-black text-gray-900 tabular-nums w-5 text-center">
-                          {qty}
-                        </span>
-                        <button
-                          onClick={() => updateCartQuantity(item.id, 1)}
-                          className="w-7 h-7 rounded-lg bg-orange-600 text-white flex items-center justify-center font-bold hover:bg-orange-700 text-xs shadow-2xs transition-all cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
+                    {/* Footer: Price & Add / Quantity Stepper */}
+                    <div className="p-4 pt-1 flex items-center justify-between border-t border-gray-100">
+                      <div>
+                        <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Цена</div>
+                        <div className="text-base font-black text-gray-900 tabular-nums">
+                          {item.price.toLocaleString()} {t.priceKzt}
+                        </div>
                       </div>
-                    )}
+
+                      {qty === 0 ? (
+                        <button
+                          onClick={() => addToCart(item)}
+                          className="flex items-center space-x-1.5 bg-orange-50 hover:bg-orange-600 hover:text-white active:scale-95 text-orange-700 border border-orange-200 px-4 py-2 rounded-xl text-xs font-extrabold transition-all shadow-2xs cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>{t.addToCart}</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center space-x-2 bg-gray-100 p-1 rounded-xl border border-gray-200">
+                          <button
+                            onClick={() => updateCartQuantity(item.id, -1)}
+                            className="w-7 h-7 rounded-lg bg-white text-gray-700 flex items-center justify-center font-bold hover:bg-gray-200 text-xs shadow-2xs transition-all cursor-pointer"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="text-xs font-black text-gray-900 tabular-nums w-5 text-center">
+                            {qty}
+                          </span>
+                          <button
+                            onClick={() => updateCartQuantity(item.id, 1)}
+                            className="w-7 h-7 rounded-lg bg-orange-600 text-white flex items-center justify-center font-bold hover:bg-orange-700 text-xs shadow-2xs transition-all cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Right Side: Desktop Sticky Order Panel */}
