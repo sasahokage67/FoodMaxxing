@@ -8,7 +8,7 @@ import { PrivacyPolicyModal } from './PrivacyPolicyModal';
 import { ChefHat, HelpCircle, Smartphone, ShieldCheck, ArrowUpRight, ExternalLink, Shield, Phone } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { lang, setActiveTab, setCustomerStep, userRole, enterAdminMode } = useApp();
+  const { lang, setActiveTab, setCustomerStep, userRole } = useApp();
   const [isFaqOpen, setIsFaqOpen] = useState(false);
   const [isKitchenRegisterOpen, setIsKitchenRegisterOpen] = useState(false);
   const [isKitchenPhoneAuthOpen, setIsKitchenPhoneAuthOpen] = useState(false);
@@ -109,18 +109,6 @@ export const Footer: React.FC = () => {
                     <span>{lang === 'kz' ? 'Асхананы тіркеу' : lang === 'en' ? 'Register Cafeteria' : 'Зарегистрировать кухню'}</span>
                   </button>
                 </li>
-                <li>
-                  <button
-                    onClick={() => {
-                      enterAdminMode();
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
-                    }}
-                    className="text-gray-400 hover:text-amber-400 text-xs font-medium transition-colors flex items-center space-x-1.5 cursor-pointer"
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5 text-gray-500 hover:text-amber-400" />
-                    <span>{lang === 'kz' ? 'Әкімшілік' : lang === 'en' ? 'Administration' : 'Панель управления'}</span>
-                  </button>
-                </li>
               </ul>
             </div>
 
@@ -181,15 +169,6 @@ export const Footer: React.FC = () => {
               </button>
               <button onClick={() => setIsKitchenRegisterOpen(true)} className="hover:text-gray-300 transition-colors">
                 {lang === 'kz' ? 'Серіктестерге' : lang === 'en' ? 'Partners' : 'Партнерам'}
-              </button>
-              <button
-                onClick={() => {
-                  enterAdminMode();
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="text-amber-400 hover:text-amber-300 font-bold transition-colors cursor-pointer"
-              >
-                {lang === 'kz' ? 'Әкімшілік' : lang === 'en' ? 'Admin' : 'Админ'}
               </button>
               <span>Just-In-Time Scheduling</span>
             </div>
