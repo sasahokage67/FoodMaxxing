@@ -165,22 +165,48 @@ export function mapOrderToDb(order: Order): Record<string, any> {
     id: order.id,
     order_number: order.orderNumber,
     customer_id: order.customerId || null,
-    customer_name: order.customerName,
+    customer_name: order.customerName || 'Гость',
     customer_phone: order.customerPhone || null,
-    items: order.items,
-    total_amount: order.totalAmount,
-    requested_pickup_time: order.requestedPickupTime,
-    status: order.status,
-    estimated_ready_time: order.estimatedReadyTime,
-    scheduled_fire_time: order.scheduledFireTime,
+    items: order.items || [],
+    total_amount: order.totalAmount || 0,
+    requested_pickup_time: order.requestedPickupTime || 'Как можно скорее',
+    status: order.status || 'SCHEDULED',
+    estimated_ready_time: order.estimatedReadyTime || '5-7 мин',
+    scheduled_fire_time: order.scheduledFireTime || 'Сейчас',
     shelf_bay: order.shelfBay || null,
     delay_minutes: order.delayMinutes || 0,
     delay_reason: order.delayReason || null,
-    created_at: order.createdAt,
+    created_at: order.createdAt || Date.now(),
     cooking_started_at: order.cookingStartedAt || null,
     ready_at: order.readyAt || null,
     picked_up_at: order.pickedUpAt || null,
     actual_wait_time_seconds: order.actualWaitTimeSeconds || null,
+  };
+}
+
+export function mapDbToVenue(row: any): Venue {
+  return {
+    id: String(row.id),
+    name: String(row.name || ''),
+    location: String(row.location || ''),
+    phone: String(row.phone || ''),
+    isActive: row.is_active !== undefined ? Boolean(row.is_active) : true,
+    isPrimary: Boolean(row.is_primary),
+    prepTime: row.prep_time ? String(row.prep_time) : '5-8 мин',
+    openingHours: row.opening_hours ? String(row.opening_hours) : '08:30 - 18:00',
+  };
+}
+
+export function mapVenueToDb(v: Venue): Record<string, any> {
+  return {
+    id: v.id,
+    name: v.name,
+    location: v.location,
+    phone: v.phone,
+    is_active: v.isActive,
+    is_primary: Boolean(v.isPrimary),
+    prep_time: v.prepTime || '5-8 мин',
+    opening_hours: v.openingHours || '08:30 - 18:00',
   };
 }
 
@@ -274,27 +300,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
       return updated;
     });
+
+    if (supabase && isSupabaseConfigured) {
+      supabase.from('venues').insert(mapVenueToDb(newVenue)).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase addVenue error:', error.message);
+      });
+    }
+
     return newVenue;
   };
 
   const updateVenue = (id: string, updates: Partial<Venue>) => {
+    let targetUpdated: Venue | undefined;
     setVenues(prev => {
-      const updated = prev.map(v => (v.id === id ? { ...v, ...updates } : v));
+      const updated = prev.map(v => {
+        if (v.id === id) {
+          targetUpdated = { ...v, ...updates };
+          return targetUpdated;
+        }
+        return v;
+      });
       try {
         localStorage.setItem('foodmaxxing_venues', JSON.stringify(updated));
       } catch {}
       return updated;
     });
+
+    if (targetUpdated && supabase && isSupabaseConfigured) {
+      supabase.from('venues').update(mapVenueToDb(targetUpdated)).eq('id', id).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase updateVenue error:', error.message);
+      });
+    }
   };
 
   const toggleVenueActive = (id: string) => {
+    let targetUpdated: Venue | undefined;
     setVenues(prev => {
-      const updated = prev.map(v => (v.id === id ? { ...v, isActive: !v.isActive } : v));
+      const updated = prev.map(v => {
+        if (v.id === id) {
+          targetUpdated = { ...v, isActive: !v.isActive };
+          return targetUpdated;
+        }
+        return v;
+      });
       try {
         localStorage.setItem('foodmaxxing_venues', JSON.stringify(updated));
       } catch {}
       return updated;
     });
+
+    if (targetUpdated && supabase && isSupabaseConfigured) {
+      supabase.from('venues').update({ is_active: targetUpdated.isActive }).eq('id', id).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase toggleVenueActive error:', error.message);
+      });
+    }
   };
 
   const [allMenuItems, setAllMenuItems] = useState<MenuItem[]>(() => {
@@ -389,6 +448,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
       return updated;
     });
+
+    if (supabase && isSupabaseConfigured) {
+      supabase.from('venues').delete().eq('id', id).then(({ error }: { error: any }) => {
+        if (error) console.error('Supabase deleteVenue error:', error.message);
+      });
+    }
   };
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('express_orders');
@@ -965,6 +1030,79 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (supabase) {
         supabase.removeChannel(channel);
       }
+    };
+  }, []);
+
+  // Supabase Realtime synchronization for venues across all devices
+  useEffect(() => {
+    const client = supabase;
+    if (!client || !isSupabaseConfigured) return;
+
+    // 1. Initial fetch of venues from Supabase
+    client
+      .from('venues')
+      .select('*')
+      .then(({ data, error }: { data: any; error: any }) => {
+        if (error) {
+          // Table may not exist yet or connection error
+          return;
+        }
+        if (data && data.length > 0) {
+          const loadedVenues = data.map(mapDbToVenue);
+          setVenues(loadedVenues);
+          try {
+            localStorage.setItem('foodmaxxing_venues', JSON.stringify(loadedVenues));
+          } catch {}
+        } else {
+          // If table is empty, seed default venue
+          const seed = DEFAULT_VENUES.map(mapVenueToDb);
+          client.from('venues').insert(seed).then(() => {});
+        }
+      });
+
+    // 2. Realtime listener for venues
+    const channel = client
+      .channel('express-venues-channel')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'venues' },
+        (payload: any) => {
+          if (payload.eventType === 'INSERT') {
+            const newVenue = mapDbToVenue(payload.new);
+            setVenues(prev => {
+              if (prev.some(v => v.id === newVenue.id)) return prev;
+              const updated = [...prev, newVenue];
+              try {
+                localStorage.setItem('foodmaxxing_venues', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = mapDbToVenue(payload.new);
+            setVenues(prev => {
+              const next = prev.map(v => (v.id === updated.id ? updated : v));
+              try {
+                localStorage.setItem('foodmaxxing_venues', JSON.stringify(next));
+              } catch {}
+              return next;
+            });
+          } else if (payload.eventType === 'DELETE') {
+            if (payload.old && payload.old.id) {
+              setVenues(prev => {
+                const next = prev.filter(v => v.id !== payload.old.id);
+                try {
+                  localStorage.setItem('foodmaxxing_venues', JSON.stringify(next));
+                } catch {}
+                return next;
+              });
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      client.removeChannel(channel);
     };
   }, []);
 
