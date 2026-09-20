@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChefHat, X, Smartphone, ArrowRight, ShieldCheck, Check, RotateCcw } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { formatPhoneNumber, isPhoneValid, isAdminPhone } from '../../utils/phoneFormatter';
+import { formatPhoneNumber, isPhoneValid, isAdminPhone, phonesMatch } from '../../utils/phoneFormatter';
 
 interface KitchenPhoneAuthModalProps {
   isOpen: boolean;
@@ -9,7 +9,7 @@ interface KitchenPhoneAuthModalProps {
 }
 
 export const KitchenPhoneAuthModal: React.FC<KitchenPhoneAuthModalProps> = ({ isOpen, onClose }) => {
-  const { lang, setUserRole, setActiveTab } = useApp();
+  const { lang, setUserRole, setActiveTab, approvedKitchenPhones, venues } = useApp();
 
   const [kitchenPhone, setKitchenPhone] = useState<string>(() => {
     return localStorage.getItem('express_kitchen_phone') || '+7(';
@@ -18,6 +18,15 @@ export const KitchenPhoneAuthModal: React.FC<KitchenPhoneAuthModalProps> = ({ is
   const [otpCode, setOtpCode] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isAuthorizedStaffPhone = (phone: string): boolean => {
+    const clean = phone.trim();
+    if (isAdminPhone(clean)) return true;
+    if (phonesMatch(clean, '+7 (778) 508 86 63') || phonesMatch(clean, '7785088663')) return true;
+    if (approvedKitchenPhones && approvedKitchenPhones.some(p => phonesMatch(p, clean))) return true;
+    if (venues && venues.some(v => v.phone && phonesMatch(v.phone, clean))) return true;
+    return false;
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -41,6 +50,17 @@ export const KitchenPhoneAuthModal: React.FC<KitchenPhoneAuthModalProps> = ({ is
           : lang === 'en'
           ? 'Enter complete 10-digit phone number'
           : 'Введите полный номер телефона (10 цифр): +7(xxx)xxx xx xx'
+      );
+      return;
+    }
+
+    if (!isAuthorizedStaffPhone(kitchenPhone)) {
+      setErrorMsg(
+        lang === 'kz'
+          ? 'Бұл нөмір асхана қызметкері ретінде тіркелмеген. Қате нөмір.'
+          : lang === 'en'
+          ? 'This phone number is not registered as kitchen staff. Incorrect phone.'
+          : 'Этот номер не зарегистрирован как персонал кухни. Неправильный номер.'
       );
       return;
     }
@@ -69,6 +89,17 @@ export const KitchenPhoneAuthModal: React.FC<KitchenPhoneAuthModalProps> = ({ is
     }
 
     const cleanPhone = kitchenPhone.trim();
+    if (!isAuthorizedStaffPhone(cleanPhone)) {
+      setErrorMsg(
+        lang === 'kz'
+          ? 'Бұл нөмірге рұқсат жоқ. Қате нөмір.'
+          : lang === 'en'
+          ? 'Access denied. Incorrect kitchen phone.'
+          : 'Доступ запрещен. Неправильный номер кухни.'
+      );
+      return;
+    }
+
     localStorage.setItem('express_kitchen_phone', cleanPhone);
 
     if (isAdminPhone(cleanPhone)) {

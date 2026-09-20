@@ -468,6 +468,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
 
+  const [maxOrderNumber, setMaxOrderNumber] = useState<number>(() => {
+    const saved = localStorage.getItem('foodmaxxing_max_order_number');
+    return saved ? Math.max(parseInt(saved, 10), 200) : 200;
+  });
+
   const [cart, setCart] = useState<CartItem[]>(() => {
     const saved = localStorage.getItem('express_cart');
     return saved ? JSON.parse(saved) : [];
@@ -979,6 +984,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             // ignore
           }
 
+          const nums = loadedOrders
+            .map((o: Order) => parseInt(o.orderNumber, 10))
+            .filter((n: number) => !isNaN(n) && n >= 200);
+          if (nums.length > 0) {
+            const top = Math.max(...nums);
+            setMaxOrderNumber(prev => {
+              const next = Math.max(prev, top);
+              try {
+                localStorage.setItem('foodmaxxing_max_order_number', String(next));
+              } catch {}
+              return next;
+            });
+          }
+
           const phone = localStorage.getItem('express_customer_phone') || '';
           if (phone) {
             const phoneKey = normalizePhoneDigits(phone);
@@ -1007,6 +1026,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (payload.eventType === 'INSERT') {
             const newOrder = mapDbToOrder(payload.new);
             if (isLegacyMockOrder(newOrder)) return;
+
+            const orderNumVal = parseInt(newOrder.orderNumber, 10);
+            if (!isNaN(orderNumVal) && orderNumVal >= 200) {
+              setMaxOrderNumber(prev => {
+                const next = Math.max(prev, orderNumVal);
+                try {
+                  localStorage.setItem('foodmaxxing_max_order_number', String(next));
+                } catch {}
+                return next;
+              });
+            }
+
             setOrders(prev => {
               if (prev.some(o => o.id === newOrder.id)) return prev;
               playNewOrderSound();
@@ -1053,6 +1084,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         supabase.removeChannel(channel);
       }
     };
+  }, []);
+
+  // Fast query for latest order number directly from Supabase on mount
+  useEffect(() => {
+    if (!supabase || !isSupabaseConfigured) return;
+    supabase
+      .from('orders')
+      .select('order_number')
+      .order('created_at', { ascending: false })
+      .limit(25)
+      .then(({ data }: { data: any }) => {
+        if (data && data.length > 0) {
+          const nums = data
+            .map((d: any) => parseInt(d.order_number, 10))
+            .filter((n: number) => !isNaN(n) && n >= 200);
+          if (nums.length > 0) {
+            const top = Math.max(...nums);
+            setMaxOrderNumber(prev => {
+              const updated = Math.max(prev, top);
+              try {
+                localStorage.setItem('foodmaxxing_max_order_number', String(updated));
+              } catch {}
+              return updated;
+            });
+          }
+        }
+      });
   }, []);
 
   // Supabase Realtime synchronization for venues across all devices
@@ -1225,14 +1283,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     customerPhone?: string;
     pickupTime: string;
   }): Order => {
-    // Generate clean 3-digit ticket numbers (starting from 201, e.g. #201, #202, #203)
-    let nextNum = 201;
-    if (orders.length > 0) {
-      const nums = orders.map(o => parseInt(o.orderNumber, 10)).filter(n => !isNaN(n) && n >= 200);
-      if (nums.length > 0) {
-        nextNum = Math.max(...nums) + 1;
-      }
-    }
+    // Generate clean sequential 3-digit ticket numbers across all devices (#201, #202, #203...)
+    const numsInState = orders
+      .map(o => parseInt(o.orderNumber, 10))
+      .filter(n => !isNaN(n) && n >= 200);
+    const stored = parseInt(localStorage.getItem('foodmaxxing_max_order_number') || '200', 10);
+    const currentMax = Math.max(
+      ...numsInState,
+      maxOrderNumber,
+      isNaN(stored) ? 200 : stored,
+      200
+    );
+    const nextNum = currentMax + 1;
+    setMaxOrderNumber(nextNum);
+    try {
+      localStorage.setItem('foodmaxxing_max_order_number', String(nextNum));
+    } catch {}
     const orderNum = nextNum.toString();
     const id = `ord_${Date.now()}_${orderNum}`;
 
