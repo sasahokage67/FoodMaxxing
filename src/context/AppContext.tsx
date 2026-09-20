@@ -732,6 +732,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUserRole('admin');
       setActiveTab('admin');
       localStorage.setItem('express_user_role', 'admin');
+    } else if (phonesMatch('+7 778 508 86 63', cleanPhone) || approvedKitchenPhones.some(p => phonesMatch(p, cleanPhone))) {
+      setUserRole('kitchen');
+      setActiveTab('kitchen');
+      localStorage.setItem('express_user_role', 'kitchen');
     }
   };
 
