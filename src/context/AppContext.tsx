@@ -579,30 +579,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch {}
 
       if (target) {
+        let venueToSync: Venue | null = null;
         setVenues(prevVenues => {
           const exists = prevVenues.some(v => v.id === target.id || v.name.toLowerCase() === target.kitchenName.toLowerCase());
           if (!exists) {
-            const newVenue: Venue = {
+            venueToSync = {
               id: target.id,
               name: target.kitchenName,
               location: target.locationName || 'Главный корпус',
               phone: target.phone,
               isActive: true,
               isPrimary: false,
-              prepTime: '10-12 мин'
+              prepTime: '10-12 мин',
+              openingHours: '08:30 - 18:00'
             };
-            const nextV = [...prevVenues, newVenue];
+            const nextV = [...prevVenues, venueToSync];
             try {
               localStorage.setItem('foodmaxxing_venues', JSON.stringify(nextV));
             } catch {}
             return nextV;
           }
           const nextV = prevVenues.map(v => (v.id === target.id || v.name.toLowerCase() === target.kitchenName.toLowerCase()) ? { ...v, isActive: true } : v);
+          venueToSync = nextV.find(v => v.id === target.id || v.name.toLowerCase() === target.kitchenName.toLowerCase()) || null;
           try {
             localStorage.setItem('foodmaxxing_venues', JSON.stringify(nextV));
           } catch {}
           return nextV;
         });
+
+        if (venueToSync && supabase && isSupabaseConfigured) {
+          supabase.from('venues').upsert(mapVenueToDb(venueToSync)).then(({ error }: { error: any }) => {
+            if (error) console.error('Supabase approveInquiry upsert error:', error.message);
+          });
+        }
       }
 
       if (target && target.phone) {
@@ -638,22 +647,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem('foodmaxxing_kitchen_inquiries', JSON.stringify(updated));
       } catch {}
 
+      const venuesToSync: Venue[] = [];
+
       setVenues(prevVenues => {
         let nextV = [...prevVenues];
         for (const item of prev) {
           const exists = nextV.some(v => v.id === item.id || v.name.toLowerCase() === item.kitchenName.toLowerCase());
           if (!exists) {
-            nextV.push({
+            const newV: Venue = {
               id: item.id,
               name: item.kitchenName,
               location: item.locationName || 'Главный корпус',
               phone: item.phone,
               isActive: true,
               isPrimary: false,
-              prepTime: '10-12 мин'
-            });
+              prepTime: '10-12 мин',
+              openingHours: '08:30 - 18:00'
+            };
+            nextV.push(newV);
+            venuesToSync.push(newV);
           } else {
             nextV = nextV.map(v => (v.id === item.id || v.name.toLowerCase() === item.kitchenName.toLowerCase()) ? { ...v, isActive: true } : v);
+            const found = nextV.find(v => v.id === item.id || v.name.toLowerCase() === item.kitchenName.toLowerCase());
+            if (found) venuesToSync.push(found);
           }
         }
         try {
@@ -661,6 +677,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch {}
         return nextV;
       });
+
+      if (venuesToSync.length > 0 && supabase && isSupabaseConfigured) {
+        supabase.from('venues').upsert(venuesToSync.map(mapVenueToDb)).then(({ error }: { error: any }) => {
+          if (error) console.error('Supabase approveAllInquiries upsert error:', error.message);
+        });
+      }
 
       const newPhones = prev.map(i => normalizePhoneDigits(i.phone)).filter(Boolean);
       setApprovedKitchenPhones(phones => {
@@ -1049,14 +1071,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         if (data && data.length > 0) {
           const loadedVenues = data.map(mapDbToVenue);
-          setVenues(loadedVenues);
-          try {
-            localStorage.setItem('foodmaxxing_venues', JSON.stringify(loadedVenues));
-          } catch {}
+          setVenues(prev => {
+            const merged = [...loadedVenues];
+            for (const loc of prev) {
+              if (!merged.some(m => m.id === loc.id)) {
+                merged.push(loc);
+                client.from('venues').upsert(mapVenueToDb(loc)).then(() => {});
+              }
+            }
+            try {
+              localStorage.setItem('foodmaxxing_venues', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
         } else {
-          // If table is empty, seed default venue
-          const seed = DEFAULT_VENUES.map(mapVenueToDb);
-          client.from('venues').insert(seed).then(() => {});
+          // If table is empty, seed default venue and any existing local venues
+          setVenues(prev => {
+            const toSeed = prev.length > 0 ? prev : DEFAULT_VENUES;
+            client.from('venues').upsert(toSeed.map(mapVenueToDb)).then(() => {});
+            return toSeed;
+          });
         }
       });
 
